@@ -17,14 +17,9 @@ docker compose logs --tail=50
 
 ## GitHub Actions secrets
 
-Create GitHub Environments named `development` and `production`. Configure the following secrets in each Environment before enabling deployment:
+Create GitHub Environments named `development` and `production`. The current runner is installed on vm01 itself, so database reconciliation runs Docker Compose locally and requires no SSH secrets. Keep the `production` Environment protected with required reviewers.
 
-- `VM01_HOST` — the VM hostname or IP.
-- `VM01_USER` — SSH user with Docker access.
-- `VM01_SSH_PRIVATE_KEY` — a dedicated GitHub Actions deployment key.
-- `VM01_SSH_KNOWN_HOSTS` — pinned `ssh-keyscan -H` output for the VM.
-
-`development.yml` runs for pull requests and pushes targeting `main`; pushes reconcile only `postgres-dev`. `production.yml` runs for pull requests and pushes targeting `prod`; pushes reconcile only `postgres-prod`. Protect the `production` Environment with required reviewers in GitHub before use. Application deployment will be added after the frontend and API containers are defined.
+`development.yml` runs for pull requests and pushes targeting `main`; pushes reconcile only `postgres-dev`. `production.yml` runs for pull requests and pushes targeting `prod`; pushes reconcile only `postgres-prod`. Application deployment will be added after the frontend and API containers are defined.
 
 The current workflows use `npm install` while the project has no committed lockfiles. Switch them to `npm ci` after generating and committing `frontend/package-lock.json` and `backend/package-lock.json`.
 

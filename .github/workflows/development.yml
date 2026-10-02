@@ -43,18 +43,8 @@ jobs:
     runs-on: [self-hosted, linux, x64, nilam]
     environment: development
     steps:
-      - name: Configure SSH
-        env:
-          SSH_KEY: ${{ secrets.VM01_SSH_PRIVATE_KEY }}
-          KNOWN_HOSTS: ${{ secrets.VM01_SSH_KNOWN_HOSTS }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Reconcile development PostgreSQL
-        env:
-          VM01_HOST: ${{ secrets.VM01_HOST }}
-          VM01_USER: ${{ secrets.VM01_USER }}
         run: |
-          ssh "$VM01_USER@$VM01_HOST" 'cd ~/nilam/postgres && docker compose up -d postgres-dev && docker compose ps postgres-dev'
+          cd "$HOME/nilam/postgres"
+          docker compose up -d postgres-dev
+          docker compose ps postgres-dev
