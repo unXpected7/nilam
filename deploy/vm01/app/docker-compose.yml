@@ -1,0 +1,55 @@
+services:
+  dev-frontend:
+    build:
+      context: ../../../frontend
+    container_name: nilam-dev-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_HOST: nilam-dev-backend
+      BACKEND_PORT: 4000
+    ports:
+      - "10.10.0.2:8091:80"
+    networks: [postgres]
+
+  dev-backend:
+    build:
+      context: ../../../backend
+    container_name: nilam-dev-backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      CLIENT_ORIGIN: https://dev-topan.fluxorastudio.id
+      DATABASE_URL: "postgresql://${DEV_POSTGRES_USER}:${DEV_POSTGRES_PASSWORD}@nilam-postgres-dev:5432/${DEV_POSTGRES_DB}"
+    ports:
+      - "10.10.0.2:5100:4000"
+    networks: [postgres]
+
+  prod-frontend:
+    build:
+      context: ../../../frontend
+    container_name: nilam-prod-frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_HOST: nilam-prod-backend
+      BACKEND_PORT: 4000
+    ports:
+      - "10.10.0.2:8092:80"
+    networks: [postgres]
+
+  prod-backend:
+    build:
+      context: ../../../backend
+    container_name: nilam-prod-backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      CLIENT_ORIGIN: https://topan.fluxorastudio.id
+      DATABASE_URL: "postgresql://${PROD_POSTGRES_USER}:${PROD_POSTGRES_PASSWORD}@nilam-postgres-prod:5432/${PROD_POSTGRES_DB}"
+    ports:
+      - "10.10.0.2:5101:4000"
+    networks: [postgres]
+
+networks:
+  postgres:
+    external: true
+    name: postgres_default

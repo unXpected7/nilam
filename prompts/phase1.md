@@ -98,6 +98,8 @@ The local backend connects directly over the LAN to vm01 development at `192.168
 
 GitHub Actions runs on the self-hosted vm01 runner `nilam-vm01` (labels: `self-hosted`, `linux`, `x64`, `nilam`). It is running as the vm01 user; a one-time sudo service installation is required for automatic startup after VM reboot.
 
+Public routing uses WireGuard `10.10.0.1` (Nginx) → `10.10.0.2` (vm01). Development deploys frontend/API to `8091`/`5100`; production deploys to `8092`/`5101`. The four Cloudflare hostnames have valid Let’s Encrypt certificates. Application deployment is defined in `deploy/vm01/app/docker-compose.yml`.
+
 ## Current next action
 
 Resolve the current intermittent npm DNS failure (`ENOTFOUND registry.npmjs.org`), then run `npm install`, `npm run db:migrate -- --name init`, and `npm run db:seed` from `backend/`. Run `npm install` from `frontend/` separately.

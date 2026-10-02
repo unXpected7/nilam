@@ -48,3 +48,7 @@ jobs:
           cd "$HOME/nilam/postgres"
           docker compose up -d postgres-dev
           docker compose ps postgres-dev
+      - name: Build and deploy development application
+        run: |
+          docker compose --env-file "$HOME/nilam/postgres/.env" -f deploy/vm01/app/docker-compose.yml up --build -d dev-frontend dev-backend
+          docker compose --env-file "$HOME/nilam/postgres/.env" -f deploy/vm01/app/docker-compose.yml ps dev-frontend dev-backend

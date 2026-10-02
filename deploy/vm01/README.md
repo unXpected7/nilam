@@ -19,7 +19,7 @@ docker compose logs --tail=50
 
 Create GitHub Environments named `development` and `production`. The current runner is installed on vm01 itself, so database reconciliation runs Docker Compose locally and requires no SSH secrets. Keep the `production` Environment protected with required reviewers.
 
-`development.yml` runs for pull requests and pushes targeting `main`; pushes reconcile only `postgres-dev`. `production.yml` runs for pull requests and pushes targeting `prod`; pushes reconcile only `postgres-prod`. Application deployment will be added after the frontend and API containers are defined.
+`development.yml` runs for pull requests and pushes targeting `main`; pushes reconcile `postgres-dev` and build/deploy the development frontend and API. `production.yml` runs for pull requests and pushes targeting `prod`; pushes reconcile `postgres-prod` and build/deploy the production frontend and API.
 
 The current workflows use `npm install` while the project has no committed lockfiles. Switch them to `npm ci` after generating and committing `frontend/package-lock.json` and `backend/package-lock.json`.
 
