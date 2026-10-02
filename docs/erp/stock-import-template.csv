@@ -1,0 +1,2 @@
+sku,quantity,warehouse,effective_at,source_reference,reason,batch,expiry_date
+NLM-EXAMPLE-SAGE,20,MAIN,2026-10-02T09:00:00+07:00,GRN-EXAMPLE-001,Goods received,,

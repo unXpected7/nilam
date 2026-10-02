@@ -1,6 +1,10 @@
 import { PrismaClient, ProductStatus } from '@prisma/client'
+import { randomBytes, scrypt as scryptCallback } from 'node:crypto'
+import { promisify } from 'node:util'
+import { defaultRolePermissions, staffPermissionKeys } from '../src/lib/staffPermissions.js'
 
 const prisma = new PrismaClient()
+const scrypt = promisify(scryptCallback)
 const toHandle = (value: string) => value.toLowerCase().replace('&', 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 const products = [
@@ -11,6 +15,23 @@ const products = [
 ]
 
 async function main() {
+  const permissions = await Promise.all(staffPermissionKeys.map(key => prisma.permission.upsert({ where: { key }, update: {}, create: { key } })))
+  const permissionByKey = new Map(permissions.map(permission => [permission.key, permission.id]))
+  for (const [name, keys] of Object.entries(defaultRolePermissions)) {
+    await prisma.staffRole.upsert({
+      where: { name }, update: {}, create: { name, permissions: { create: keys.map(key => ({ permissionId: permissionByKey.get(key)! })) } },
+    })
+  }
+  const bootstrapEmail = process.env.ERP_BOOTSTRAP_EMAIL?.trim().toLowerCase() || 'admin@admin.com'
+  const bootstrapPassword = process.env.ERP_BOOTSTRAP_PASSWORD || 'P@55w0rd'
+  if (bootstrapEmail && bootstrapPassword && process.env.NODE_ENV !== 'production') {
+    if (bootstrapPassword.length < 8) throw new Error('ERP_BOOTSTRAP_PASSWORD must be at least 8 characters')
+    const salt = randomBytes(16).toString('hex'); const derived = await scrypt(bootstrapPassword, salt, 64) as Buffer
+    const passwordHash = `${salt}:${derived.toString('hex')}`
+    const staff = await prisma.staffUser.upsert({ where: { email: bootstrapEmail }, update: { active: true, passwordHash }, create: { email: bootstrapEmail, passwordHash } })
+    const role = await prisma.staffRole.findUniqueOrThrow({ where: { name: 'Super Admin' } })
+    await prisma.staffUserRole.upsert({ where: { staffUserId_roleId: { staffUserId: staff.id, roleId: role.id } }, update: {}, create: { staffUserId: staff.id, roleId: role.id } })
+  }
   for (const item of products) {
     const category = await prisma.category.upsert({ where: { handle: toHandle(item.category) }, update: {}, create: { name: item.category, handle: toHandle(item.category) } })
     await prisma.product.upsert({

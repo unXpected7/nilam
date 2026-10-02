@@ -1,12 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { requestHeaders } from './request'
 
 export type Customer = { id: string; email: string; firstName: string | null; lastName: string | null }
 type AuthContextValue = { user: Customer | null; loading: boolean; login: (email: string, password: string) => Promise<void>; register: (email: string, password: string, firstName: string) => Promise<void>; updateProfile: (firstName: string, lastName: string) => Promise<void>; changePassword: (currentPassword: string, newPassword: string) => Promise<void>; logout: () => Promise<void> }
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 async function request(path: string, init?: RequestInit) {
-  const response = await fetch(`/api/auth${path}`, { ...init, headers: { 'content-type': 'application/json', ...(init?.headers || {}) } })
+  const response = await fetch(`/api/auth${path}`, { ...init, headers: requestHeaders(init?.headers) })
   if (response.status === 204) return null
   const body = await response.json() as { user?: Customer | null; message?: string }
   if (!response.ok) throw new Error(body.message || 'Unable to complete this request')

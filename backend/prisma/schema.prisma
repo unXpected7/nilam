@@ -28,18 +28,40 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum FulfillmentStatus {
+  UNFULFILLED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum VoucherType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum InventoryImportStatus {
+  UPLOADED
+  VALIDATED
+  APPLIED
+  REJECTED
+  ROLLED_BACK
+}
+
 model User {
-  id           String            @id @default(cuid())
-  email        String            @unique
-  passwordHash String?
-  firstName    String?
-  lastName     String?
-  addresses    Address[]
-  carts        Cart[]
-  orders       Order[]
-  sessions     CustomerSession[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  passwordHash       String?
+  firstName          String?
+  lastName           String?
+  addresses          Address[]
+  carts              Cart[]
+  orders             Order[]
+  voucherRedemptions VoucherRedemption[]
+  sessions           CustomerSession[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model CustomerSession {
@@ -49,6 +71,81 @@ model CustomerSession {
   tokenHash String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model StaffUser {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  passwordHash String?
+  firstName    String?
+  lastName     String?
+  active       Boolean            @default(true)
+  roles        StaffUserRole[]
+  sessions     StaffSession[]
+  accessEvents StaffAccessEvent[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model StaffRole {
+  id          String                @id @default(cuid())
+  name        String                @unique
+  description String?
+  users       StaffUserRole[]
+  permissions StaffRolePermission[]
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model Permission {
+  id          String                @id @default(cuid())
+  key         String                @unique
+  description String?
+  roles       StaffRolePermission[]
+  createdAt   DateTime              @default(now())
+}
+
+model StaffUserRole {
+  staffUserId String
+  staffUser   StaffUser @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  roleId      String
+  role        StaffRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime  @default(now())
+
+  @@id([staffUserId, roleId])
+}
+
+model StaffRolePermission {
+  roleId       String
+  role         StaffRole  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model StaffSession {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([staffId])
+}
+
+model StaffAccessEvent {
+  id        String     @id @default(cuid())
+  staffId   String?
+  staff     StaffUser? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  event     String
+  requestId String?
+  metadata  Json?
+  createdAt DateTime   @default(now())
+
+  @@index([staffId, createdAt])
+  @@index([event, createdAt])
 }
 
 model Address {
@@ -84,36 +181,36 @@ model Collection {
 }
 
 model Product {
-  id          String              @id @default(cuid())
-  name        String
-  handle      String              @unique
-  description String
-  seoTitle    String?
+  id             String              @id @default(cuid())
+  name           String
+  handle         String              @unique
+  description    String
+  seoTitle       String?
   seoDescription String?
   colourFamily   String?
   undertone      String?
-  status      ProductStatus       @default(DRAFT)
-  archivedAt  DateTime?
-  categoryId  String
-  category    Category            @relation(fields: [categoryId], references: [id])
-  variants    ProductVariant[]
-  media       ProductMedia[]
-  collections ProductCollection[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  status         ProductStatus       @default(DRAFT)
+  archivedAt     DateTime?
+  categoryId     String
+  category       Category            @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  media          ProductMedia[]
+  collections    ProductCollection[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 }
 
 model ProductVariant {
-  id        String    @id @default(cuid())
-  productId String
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
-  name      String
-  sku       String    @unique
-  price     Int
-  inventory Inventory?
-  cartItems CartItem[]
+  id         String      @id @default(cuid())
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name       String
+  sku        String      @unique
+  price      Int
+  inventory  Inventory?
+  cartItems  CartItem[]
   orderItems OrderItem[]
-  createdAt DateTime  @default(now())
+  createdAt  DateTime    @default(now())
 }
 
 model ProductMedia {
@@ -136,6 +233,7 @@ model ProductCollection {
   collectionId String
   product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
   collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
   @@id([productId, collectionId])
 }
 
@@ -161,6 +259,34 @@ model InventoryMovement {
   createdAt        DateTime  @default(now())
 }
 
+model InventoryImport {
+  id              String                @id @default(cuid())
+  status          InventoryImportStatus @default(UPLOADED)
+  sourceReference String
+  checksum        String?
+  actor           String
+  rows            InventoryImportRow[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([sourceReference])
+}
+
+model InventoryImportRow {
+  id        String          @id @default(cuid())
+  importId  String
+  import    InventoryImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  rowNumber Int
+  sku       String
+  quantity  Int?
+  warehouse String
+  reason    String
+  error     String?
+  createdAt DateTime        @default(now())
+
+  @@unique([importId, rowNumber])
+}
+
 model Cart {
   id        String     @id @default(cuid())
   userId    String?
@@ -178,28 +304,105 @@ model CartItem {
   variantId String
   variant   ProductVariant @relation(fields: [variantId], references: [id])
   quantity  Int            @default(1)
+
   @@unique([cartId, variantId])
 }
 
 model Order {
-  id            String        @id @default(cuid())
-  userId        String?
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  email         String
-  status        OrderStatus   @default(PENDING)
-  paymentStatus PaymentStatus @default(PENDING)
-  subtotal      Int
-  shipping      Int           @default(0)
-  total         Int
-  items         OrderItem[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                String            @id @default(cuid())
+  orderNumber       String?           @unique
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email             String
+  status            OrderStatus       @default(PENDING)
+  paymentStatus     PaymentStatus     @default(PENDING)
+  subtotal          Int
+  discount          Int               @default(0)
+  shipping          Int               @default(0)
+  tax               Int               @default(0)
+  total             Int
+  shippingAddress   Json?
+  shippingMethod    Json?
+  fulfillmentStatus FulfillmentStatus @default(UNFULFILLED)
+  items             OrderItem[]
+  paymentAttempts   PaymentAttempt[]
+  shipment          Shipment?
+  events            OrderEvent[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model CheckoutQuote {
+  id              String   @id @default(cuid())
+  cartId          String
+  userId          String?
+  email           String
+  shippingAddress Json
+  shippingMethod  Json
+  voucherCode     String?
+  subtotal        Int
+  discount        Int      @default(0)
+  shipping        Int
+  tax             Int      @default(0)
+  total           Int
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([cartId, expiresAt])
+  @@index([userId, expiresAt])
+}
+
+model Shipment {
+  id             String    @id @default(cuid())
+  orderId        String    @unique
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider       String?
+  service        String?
+  trackingNumber String?   @unique
+  status         String    @default("PENDING")
+  labelUrl       String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  event     String
+  actor     String?
+  requestId String?
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model PaymentAttempt {
+  id                String        @id @default(cuid())
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String
+  providerOrderId   String        @unique
+  providerPaymentId String?
+  snapToken         String?
+  amount            Int
+  status            PaymentStatus @default(PENDING)
+  paymentType       String?
+  notificationHash  String?       @unique
+  verifiedAt        DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([orderId, createdAt])
 }
 
 model OrderItem {
-  id        String         @id @default(cuid())
+  id        String          @id @default(cuid())
   orderId   String
-  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variantId String?
   variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   name      String
@@ -224,6 +427,35 @@ model NewsletterSubscriber {
   id        String   @id @default(cuid())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+model Voucher {
+  id              String              @id @default(cuid())
+  code            String              @unique
+  type            VoucherType
+  value           Int
+  minimumSubtotal Int?
+  maximumDiscount Int?
+  startsAt        DateTime?
+  expiresAt       DateTime?
+  usageLimit      Int?
+  usageCount      Int                 @default(0)
+  active          Boolean             @default(true)
+  redemptions     VoucherRedemption[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+}
+
+model VoucherRedemption {
+  id         String   @id @default(cuid())
+  voucherId  String
+  voucher    Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId    String?  @unique
+  redeemedAt DateTime @default(now())
+
+  @@unique([voucherId, userId])
 }
 
 model AdminAuditLog {

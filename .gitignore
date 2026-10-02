@@ -2,6 +2,11 @@ node_modules
 dist
 .env
 .env.*
+docs/external/midtrans.md
+docs/external/biteship.md
+docs/external/brevo.md
+docs/external/keys/*
+!docs/external/keys/README.md
 !*.env.example
 .npm-cache
 .DS_Store

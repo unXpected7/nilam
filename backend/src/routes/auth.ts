@@ -202,6 +202,16 @@ authRouter.get('/orders', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 
+authRouter.get('/orders/:id', async (request, response, next) => {
+  try {
+    const user = await currentAuthenticatedUser(request.header('cookie'))
+    if (!user) { response.status(401).json({ message: 'Please sign in to view your order' }); return }
+    const order = await prisma.order.findFirst({ where: { id: request.params.id, userId: user.id }, select: { id: true, status: true, paymentStatus: true, subtotal: true, shipping: true, total: true, createdAt: true, items: { select: { id: true, name: true, sku: true, price: true, quantity: true } } } })
+    if (!order) { response.status(404).json({ message: 'Order not found' }); return }
+    response.json({ ...order, events: [] })
+  } catch (error) { next(error) }
+})
+
 authRouter.get('/addresses', async (request, response, next) => {
   try {
     const user = await currentAuthenticatedUser(request.header('cookie'))

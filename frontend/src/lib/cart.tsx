@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { requestHeaders } from './request'
 
 export type Cart = {
   id: string
@@ -12,7 +13,7 @@ type CartContextValue = { cart: Cart | null; loading: boolean; refresh: () => Pr
 const CartContext = createContext<CartContextValue | undefined>(undefined)
 
 async function request(path: string, init?: RequestInit) {
-  const response = await fetch(`/api/cart${path}`, { ...init, headers: { 'content-type': 'application/json', ...(init?.headers || {}) } })
+  const response = await fetch(`/api/cart${path}`, { ...init, headers: requestHeaders(init?.headers) })
   const body = await response.json()
   if (!response.ok) throw new Error(body.message || 'Unable to update your bag')
   return body as Cart

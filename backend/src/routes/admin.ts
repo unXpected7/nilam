@@ -3,8 +3,33 @@ import { ProductStatus } from '@prisma/client'
 import multer from 'multer'
 import { prisma } from '../lib/prisma.js'
 import { convertAndStoreProductImage, deleteStoredMedia } from '../lib/mediaStorage.js'
+import { parseStockImportCsv } from '../lib/stockImport.js'
 
 export const adminRouter = Router()
+adminRouter.use((request, response, next) => {
+  const staff = response.locals.staff
+  if (!staff) { next(); return } // Temporary legacy-token migration path.
+  const path = request.path
+  const permission = path.startsWith('/inventory/imports') ? 'inventory.import' : path.startsWith('/inventory') ? (request.method === 'GET' ? 'inventory.read' : 'inventory.adjust')
+    : path.startsWith('/media') || path.includes('/media') ? (request.method === 'GET' ? 'catalogue.read' : 'media.write')
+      : path.startsWith('/dashboard') ? 'dashboard.read'
+        : request.method === 'GET' ? 'catalogue.read' : 'catalogue.write'
+  if (!staff.permissions.has(permission)) { response.status(403).json({ message: 'You do not have permission for this action' }); return }
+  next()
+})
+
+adminRouter.post('/inventory/imports/preview', async (request, response, next) => {
+  try {
+    const csv = typeof request.body?.csv === 'string' ? request.body.csv : ''
+    if (!csv || csv.length > 5 * 1024 * 1024) { response.status(400).json({ message: 'Provide a CSV file no larger than 5 MB' }); return }
+    const parsed = parseStockImportCsv(csv)
+    const skus = [...new Set(parsed.rows.map(row => row.sku))]
+    const variants = await prisma.productVariant.findMany({ where: { sku: { in: skus } }, select: { sku: true } })
+    const known = new Set(variants.map(variant => variant.sku))
+    const errors = [...parsed.errors, ...parsed.rows.filter(row => !known.has(row.sku)).map(row => `Unknown SKU: ${row.sku}`)]
+    response.json({ rows: parsed.rows.map(row => ({ ...row, knownSku: known.has(row.sku) })), errors, summary: { total: parsed.rows.length, valid: parsed.rows.filter(row => known.has(row.sku)).length, invalid: errors.length } })
+  } catch (error) { next(error) }
+})
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } })
 type AdminProductRow = Record<string, unknown> & {
   category: { name: string }

@@ -4,11 +4,12 @@ import express from 'express'
 import swaggerUi from 'swagger-ui-express'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { prisma } from './lib/prisma.js'
 import { requireAdmin } from './middleware/adminAuth.js'
 import { adminRouter } from './routes/admin.js'
 import { authRouter, currentAuthenticatedUser } from './routes/auth.js'
+import { staffAuthRouter } from './routes/staffAuth.js'
 import { openApiDocument } from './openapi.js'
 
 const app = express()
@@ -40,6 +41,15 @@ function displayDatabaseUrl(databaseUrl: string | undefined) {
   }
 }
 
+function readCookie(cookieHeader: string | undefined, name: string) {
+  const match = cookieHeader?.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`))
+  return match?.[1]
+}
+
+function cookieAttributes(httpOnly = false) {
+  return `Path=/; ${httpOnly ? 'HttpOnly; ' : ''}SameSite=Lax; Max-Age=2592000${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
+}
+
 function pagination(query: express.Request['query']) {
   const requestedPage = Number(query.page ?? 1)
   const requestedLimit = Number(query.limit ?? 24)
@@ -65,12 +75,39 @@ function rateLimit(limit: number, windowMs: number) {
 }
 
 app.set('trust proxy', 1)
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }))
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true, allowedHeaders: ['content-type', 'x-csrf-token', 'x-request-id'], exposedHeaders: ['x-request-id'] }))
+app.use((req, res, next) => {
+  const requestId = req.header('x-request-id')?.slice(0, 128) || randomUUID()
+  res.locals.requestId = requestId
+  res.setHeader('X-Request-ID', requestId)
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  next()
+})
+app.use((req, res, next) => {
+  const existing = readCookie(req.header('cookie'), 'nilam_csrf')
+  const token = existing || randomBytes(32).toString('base64url')
+  if (!existing) res.append('Set-Cookie', `nilam_csrf=${token}; ${cookieAttributes()}`)
+  const cookieAuthenticatedWrite = !req.path.startsWith('/api/admin/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)
+  if (cookieAuthenticatedWrite && req.header('x-csrf-token') !== token) {
+    res.status(403).json({ message: 'Your session could not be verified. Refresh the page and try again.' })
+    return
+  }
+  next()
+})
+app.use((req, res, next) => {
+  const startedAt = Date.now()
+  res.on('finish', () => console.info(JSON.stringify({ event: 'http_request', requestId: res.locals.requestId, method: req.method, path: req.path, status: res.statusCode, durationMs: Date.now() - startedAt })))
+  next()
+})
 app.use(express.json())
 app.get('/swagger.json', (_request, response) => response.json(openApiDocument))
 app.use('/swagger', swaggerUi.serve, swaggerUi.setup(openApiDocument, { customSiteTitle: 'Nilam API documentation' }))
 app.use('/api/admin', rateLimit(30, 60_000), requireAdmin, adminRouter)
 app.use('/api/auth', rateLimit(10, 60_000), authRouter)
+app.use('/api/erp/auth', rateLimit(10, 60_000), staffAuthRouter)
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`
@@ -85,23 +122,29 @@ app.get('/api/products', rateLimit(120, 60_000), async (req, res, next) => {
     const category = String(req.query.category || '').trim()
     const colourFamily = String(req.query.colourFamily || '').trim()
     const availability = String(req.query.availability || '').trim()
-    const minPrice = Number(req.query.minPrice)
-    const maxPrice = Number(req.query.maxPrice)
+    const collection = String(req.query.collection || '').trim()
+    const requestedMinPrice = Number(req.query.minPrice)
+    const requestedMaxPrice = Number(req.query.maxPrice)
+    const minPrice = Number.isFinite(requestedMinPrice) && requestedMinPrice >= 0 ? Math.min(Math.round(requestedMinPrice), 100_000_000) : undefined
+    const maxPrice = Number.isFinite(requestedMaxPrice) && requestedMaxPrice >= 0 ? Math.min(Math.round(requestedMaxPrice), 100_000_000) : undefined
     const { page, limit, skip } = pagination(req.query)
-    const sort = String(req.query.sort || 'newest')
+    const requestedSort = String(req.query.sort || 'newest')
+    const sort = requestedSort === 'oldest' || requestedSort === 'name' ? requestedSort : 'newest'
+    const canonicalAvailability = availability === 'in-stock' ? 'in-stock' : ''
     const price = {
-      ...(Number.isFinite(minPrice) && minPrice >= 0 ? { gte: Math.round(minPrice) } : {}),
-      ...(Number.isFinite(maxPrice) && maxPrice >= 0 ? { lte: Math.round(maxPrice) } : {}),
+      ...(minPrice !== undefined ? { gte: minPrice } : {}),
+      ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
     }
     const variantWhere = {
       ...(Object.keys(price).length ? { price } : {}),
-      ...(availability === 'in-stock' ? { inventory: { is: { quantity: { gt: 0 } } } } : {}),
+      ...(canonicalAvailability ? { inventory: { is: { quantity: { gt: 0 } } } } : {}),
     }
     const where = {
       status: 'ACTIVE' as const,
       ...(category ? { category: { handle: category } } : {}),
       ...(colourFamily ? { colourFamily: { equals: colourFamily, mode: 'insensitive' as const } } : {}),
-      ...(Object.keys(variantWhere).length ? { variants: { some: variantWhere } } : {}),
+      ...(collection ? { collections: { some: { collection: { handle: collection } } } } : {}),
+      variants: { some: variantWhere },
       ...(query ? { OR: [{ name: { contains: query, mode: 'insensitive' as const } }, { description: { contains: query, mode: 'insensitive' as const } }] } : {}),
     }
     const [products, total] = await Promise.all([prisma.product.findMany({
@@ -109,7 +152,7 @@ app.get('/api/products', rateLimit(120, 60_000), async (req, res, next) => {
       include: { category: true, variants: { take: 1, orderBy: { price: 'asc' } }, media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' } } },
       orderBy: sort === 'oldest' ? { createdAt: 'asc' } : sort === 'name' ? { name: 'asc' } : { createdAt: 'desc' },
     }), prisma.product.count({ where })])
-    res.json(paged(products.map((product: StorefrontProduct) => ({
+    res.json({ ...paged(products.map((product: StorefrontProduct) => ({
       id: product.id,
       handle: product.handle,
       name: product.name,
@@ -119,7 +162,11 @@ app.get('/api/products', rateLimit(120, 60_000), async (req, res, next) => {
       description: product.description,
       colourFamily: product.colourFamily,
       undertone: product.undertone,
-    })), total, page, limit))
+    })), total, page, limit), appliedFilters: {
+      q: query || undefined, category: category || undefined, colourFamily: colourFamily || undefined,
+      collection: collection || undefined, availability: canonicalAvailability || undefined,
+      minPrice, maxPrice, sort,
+    } })
   } catch (error) { next(error) }
 })
 app.get('/api/products/facets', rateLimit(120, 60_000), async (_req, res, next) => {
@@ -297,9 +344,10 @@ app.delete('/api/cart/items/:id', async (req, res, next) => {
 app.use(express.static(adminUiDirectory))
 app.get(['/', '/dashboard', '/products', '/categories', '/collections', '/inventory'], (_req, res) => res.sendFile(join(adminUiDirectory, 'index.html')))
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(error)
+  const message = error instanceof Error ? error.message : 'An unexpected error occurred'
+  console.error(JSON.stringify({ event: 'request_error', requestId: res.locals.requestId, message }))
   if (error instanceof Error) {
-    res.status(400).json({ message: error.message })
+    res.status(400).json({ message })
     return
   }
   res.status(500).json({ message: 'An unexpected error occurred' })

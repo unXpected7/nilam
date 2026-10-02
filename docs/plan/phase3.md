@@ -32,16 +32,16 @@ The reference's collection uses a high-density catalogue with price, colour, and
 - [x] Public catalogue browsing supports URL-backed newest/oldest/name sorting plus category, colour family, price range, and in-stock filtering on the all-products/search flow.
 - [x] The catalogue consumes existing page metadata, reports total matching pieces, and supports an in-progress-safe “load more” path without resetting active filters.
 - [x] Public filter options now come from a published-product facets endpoint, including category and colour-family counts.
-- [ ] There is no checkout UI/API, customer authentication, order creation transaction, customer account UI, or payment/shipping configuration.
-- [ ] Catalogue filtering is not implemented in the public UI; current collection/search responses and UI are only the initial browse experience.
+- [ ] There is no checkout UI/API, order-creation transaction, or payment/shipping configuration. Customer authentication and account management are implemented, while recovery/reset and order detail remain open.
+- [x] Public catalogue/search UI now has URL-backed sort, category, colour, price, and availability filters; active-filter removal/clear-all, result count, and guarded load-more are present. Desktop sidebar/mobile modal quality and collection-context filtering remain open.
 
 ## 1. Shared purchase-flow foundation
 
-- [ ] Confirm the source of truth and calculation rules for IDR prices, sale prices, subtotal, shipping, discounts, tax (if applicable), grand total, and rounding. Prices shown in the browser must always originate from the API's current calculation.
-- [ ] Define and migrate explicit domain models for shipping zones/rates, delivery methods, voucher/redemption rules, checkout/order addresses, order number, payment attempts, and order timeline/events. Snapshot product name, SKU, unit price, selected options, fulfilment address, and shipping method on each order.
+- [ ] Confirm the source of truth and calculation rules for IDR prices, sale prices, subtotal, shipping, discounts, tax (if applicable), grand total, and rounding. A server-side configurable 11% tax basis-point setting and integer-IDR rounding helper are in place; shipping, discounts, grand-total and quote authority remain open.
+- [ ] Define and migrate explicit domain models for shipping zones/rates, delivery methods, voucher/redemption rules, checkout/order addresses, order number, payment attempts, and order timeline/events. A Midtrans-ready payment-attempt model/migration is now defined; shipping, voucher, address, order-number, and event models remain open.
 - [ ] Add shared request validation and a consistent public error contract for every cart, checkout, account, and order write endpoint.
 - [ ] Establish an order state machine separating order, payment, and fulfilment states; document allowed transitions, cancellation window, refund rules, and idempotency behaviour.
-- [ ] Add customer-safe rate limits, CSRF protection appropriate to cookie sessions, security headers, structured logging with secret/PII redaction, and correlation IDs for all transactional requests.
+- [ ] Add customer-safe rate limits, CSRF protection appropriate to cookie sessions, security headers, structured logging with secret/PII redaction, and correlation IDs for all transactional requests. Initial in-process rate limits, double-submit CSRF protection, baseline browser-security headers, request IDs, and body-free structured request/error logging are implemented; centralised/distributed rate limiting and a transactional audit/log-retention design remain open.
 - [ ] Publish approved Nilam terms, privacy, delivery, exchange/return, and payment-policy copy before checkout can accept an order.
 
 ## 2. Collections and product discovery
@@ -50,7 +50,7 @@ The reference's collection uses a high-density catalogue with price, colour, and
 
 - [x] Add a public facets endpoint that returns category and colour-family filter values with counts from active Nilam products. Context-sensitive facet counts and collection-detail facets remain open.
 - [x] Add validated public catalogue filters for category, colour family, price range, and in-stock availability without exposing unpublished products. Pagination and stable newest/oldest/name sorting remain in the existing endpoint; facets and collection-detail filtering remain open.
-- [ ] Extend public catalogue endpoints with validated, bounded `page`, `limit`, `sort`, `minPrice`, `maxPrice`, category, colour-family, availability, and collection filters. Return applied filters, facet counts, page metadata, and canonical sort/filter values.
+- [ ] Extend public catalogue endpoints with validated, bounded `page`, `limit`, `sort`, `minPrice`, `maxPrice`, category, colour-family, availability, and collection filters. The product endpoint now canonicalizes bounded price/sort values, requires a variant, supports a collection filter, and returns applied filters plus page metadata; context-sensitive facet counts remain open.
 - [ ] Ensure only active products with purchasable variants appear in public results; retain an explicit option to show sold-out products only when merchandising approves it.
 - [ ] Add original product attributes needed for filtering and PDP facts: colour display name/swatches, size/fit, material, care, dimensions, badges, compare-at price, and related-collection/recommendation relationships.
 - [ ] Add recommendation selection rules (same collection/category, compatible colour family, in-stock preference), with a deterministic fallback and no third-party behavioural profiling.
@@ -76,7 +76,7 @@ The reference's collection uses a high-density catalogue with price, colour, and
 - [ ] Add structured sections for description, material, fit/measurements, care, shipping/returns, and stock/dispatch guidance. Use accessible disclosures only where they improve mobile scanning.
 - [ ] Add quantity selection with stock caps, pending/success/error state for add-to-cart, and a post-add choice to continue shopping or review the cart; preserve the cart drawer as a quick confirmation surface.
 - [x] Add related/recommended Nilam products using the published-category recommendation endpoint; a recently viewed list remains pending privacy approval.
-- [ ] Generate product-level title, description, canonical URL, Open Graph data, JSON-LD Product/Offer markup, and image dimensions from the API's published data.
+- [ ] Generate product-level title, description, canonical URL, Open Graph data, JSON-LD Product/Offer markup, and image dimensions from the API's published data. PDP browser title and description now come from published product data; canonical, Open Graph, JSON-LD, and full API-backed media metadata remain open.
 
 ## 4. Cart
 
@@ -84,7 +84,7 @@ The reference's collection uses a high-density catalogue with price, colour, and
 - [x] Add recoverable mutation feedback to the cart page and revalidate the shared cart on browser-tab focus, so current API price/stock data replaces stale local presentation after changes or a return visit.
 - [ ] Build item rows with media, product/variant details, unit price, sale treatment, stock-aware quantity stepper, remove action, and mutation/loading/error feedback. Revalidate availability and price after each cart change and on page focus.
 - [ ] Show API-calculated item count, subtotal, discount, delivery estimate, tax note, and total. Clearly label estimates until checkout has a delivery address and method.
-- [ ] Add voucher entry only when voucher rules are implemented; show server-returned validation feedback and allow removal without losing the rest of the cart.
+- [ ] Add voucher entry only when voucher rules are implemented; show server-returned validation feedback and allow removal without losing the rest of the cart. Approved voucher defaults are configurable in the server environment: 20% discount, Rp200.000 minimum subtotal, seven-day expiry, and one redemption per authenticated customer; checkout entry and ERP management remain open.
 - [ ] Provide delivery/postcode estimator only after the rate engine is ready; do not imply a promise the operation cannot fulfil.
 - [ ] Build empty-cart, stock-changed, expired-cart, and cart-unavailable states with clear recovery actions. Add an optional related-product rail that never blocks checkout.
 - [ ] Enforce a single primary “Checkout” path and a secondary continue-shopping path on all breakpoints.
@@ -93,8 +93,8 @@ The reference's collection uses a high-density catalogue with price, colour, and
 
 ### Commercial decisions required before payment activation
 
-- [ ] Approve shipping origins, serviceable zones, carriers/rates, handling times, free-shipping threshold, taxes, voucher policy, cancellation/refund policy, and customer-support escalation path.
-- [ ] Select a payment service provider and document credentials ownership, webhooks, settlement/reconciliation, fraud controls, supported Indonesian methods, test mode, and failure/retry behaviour. Keep provider secrets server-side.
+- [ ] Approve shipping origins, serviceable zones, carriers/rates, handling times, free-shipping threshold, taxes, voucher policy, cancellation/refund policy, and customer-support escalation path. Approved: online-only service, one Indonesian origin at Jl Raya Jalingkos, Kendalserut, Slawi, Tegal, Central Java `52412`, Indonesia-only delivery, configurable 11% tax disclosure, Biteship JNE/J&T services only, ERP-managed vouchers, and support contact `nilam-store-dev@fluxorastudio.id`. Vouchers use configurable 4–6 character alphanumeric codes, default 20%/Rp200.000 minimum/Rp30.000 cap/seven-day expiry/one use per customer. Cancellation/refund is manually reviewed in ERP with configurable three-day target. Carrier rates, handling/free-shipping, and escalation remain open.
+- [ ] Select a payment service provider and document credentials ownership, webhooks, settlement/reconciliation, fraud controls, supported Indonesian methods, test mode, and failure/retry behaviour. Keep provider secrets server-side. Midtrans sandbox is selected; approved intended methods are QRIS, GoPay, ShopeePay, and bank virtual accounts. Settlement/reconciliation, fraud controls, production activation, and retry ownership remain open.
 
 ### Backend
 
@@ -127,8 +127,9 @@ The reference's collection uses a high-density catalogue with price, colour, and
 - [x] Add an authenticated change-password flow: it verifies the current password, enforces the existing password policy, re-hashes the replacement, atomically revokes all previous customer sessions, creates a fresh session/cookie, and provides confirmation/error feedback in `/account`.
 - [x] Add a customer-owned saved-address book and default address: authenticated list/create/delete/default endpoints scope every query to the current user, validate Indonesian phone/postal-code and address fields server-side, enforce at most one default per customer with a database partial unique index, promote a replacement on default deletion, and let `/account` save/remove/select addresses with feedback.
 - [x] Add ownership-scoped saved-address editing. `PATCH /api/auth/addresses/:id` revalidates every editable address field and returns 404 for another customer’s address; `/account` now pre-fills the selected address, supports cancel/update feedback, and preserves its default status.
-- [x] Add the authenticated order-history API foundation: `GET /api/auth/orders` returns at most 50 newest orders with only the current customer’s statuses, totals, dates, and item snapshots; a routed order-history UI will follow when checkout creates orders.
-- [ ] Build account profile, password, address-book/default-address, and order-history/order-detail screens. Customers may access only their own data and order records.
+- [x] Add the authenticated order-history API: `GET /api/auth/orders` returns at most 50 newest orders with only the current customer’s statuses, totals, dates, and item snapshots.
+- [x] Build the `/account` profile, password, address-book/default-address, and recent order-history views. Order history shows item snapshots, current order/payment statuses, date, and server totals with loading, empty, and error states.
+- [ ] Add individual order-detail routes and timeline/events after checkout and fulfilment state transitions are in place. Ownership-scoped `GET /api/auth/orders/:id` and `/account/orders/:id` now expose an order snapshot; persisted timeline events remain open.
 - [x] Wire the header account control to `/account` for signed-in shoppers or `/account/login` for guests, preserving a local-path-only `returnTo` destination after authentication.
 
 ## 7. Operations, observability, and migration

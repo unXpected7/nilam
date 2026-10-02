@@ -11,6 +11,7 @@ import { ProductPage } from './pages/ProductPage'
 import { ContentPage, StoresPage } from './pages/ContentPages'
 import { CartPage } from './pages/CartPage'
 import { AccountPage } from './pages/AccountPage'
+import { OrderDetailPage } from './pages/OrderDetailPage'
 import { FaqAccordion, ProductPrinciples, StoryCard, StyleExplorer } from './components/EditorialModules'
 import './App.css'
 import './media-placeholders.css'
@@ -25,6 +26,6 @@ function HomePage() {
 }
 
 function App() {
-  return <Routes><Route path="/" element={<HomePage />} /><Route path="/collections/:handle" element={<CollectionPage />} /><Route path="/products/:handle" element={<ProductPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/cart" element={<CartPage />} /><Route path="/account" element={<AccountPage />} /><Route path="/account/login" element={<AccountPage />} /><Route path="/account/register" element={<AccountPage />} /><Route path="/pages/stores" element={<StoresPage />} /><Route path="/pages/about" element={<ContentPage page="about" />} /><Route path="/pages/terms" element={<ContentPage page="terms" />} /><Route path="/pages/privacy" element={<ContentPage page="privacy" />} /><Route path="*" element={<HomePage />} /></Routes>
+  return <Routes><Route path="/" element={<HomePage />} /><Route path="/collections/:handle" element={<CollectionPage />} /><Route path="/products/:handle" element={<ProductPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/cart" element={<CartPage />} /><Route path="/account" element={<AccountPage />} /><Route path="/account/login" element={<AccountPage />} /><Route path="/account/register" element={<AccountPage />} /><Route path="/account/orders/:id" element={<OrderDetailPage />} /><Route path="/pages/stores" element={<StoresPage />} /><Route path="/pages/about" element={<ContentPage page="about" />} /><Route path="/pages/terms" element={<ContentPage page="terms" />} /><Route path="/pages/privacy" element={<ContentPage page="privacy" />} /><Route path="*" element={<HomePage />} /></Routes>
 }
 export default App

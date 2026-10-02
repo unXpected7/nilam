@@ -21,7 +21,7 @@ export function ProductPage() {
   const [message, setMessage] = useState('')
   const [recommendations, setRecommendations] = useState<Product[]>([])
   const { addItem } = useCart()
-  useEffect(() => { fetch(`/api/products/${handle}`).then(response => response.ok ? response.json() : Promise.reject()).then(setProduct).catch(() => undefined) }, [handle])
+  useEffect(() => { fetch(`/api/products/${handle}`).then(response => response.ok ? response.json() : Promise.reject()).then((result: ProductDetail) => { setProduct(result); document.title = `${result.name} — Nilam`; let description = document.querySelector('meta[name="description"]'); if (!description) { description = document.createElement('meta'); description.setAttribute('name', 'description'); document.head.append(description) }; description.setAttribute('content', result.description) }).catch(() => undefined) }, [handle])
   useEffect(() => { fetch(`/api/products/${handle}/recommendations`).then(response => response.ok ? response.json() : Promise.reject()).then(setRecommendations).catch(() => setRecommendations([])) }, [handle])
   if (!product) return <><Header /><main className="catalogue empty-state"><h1>Piece not found</h1><Link className="button" to="/collections/all">Browse the collection</Link></main><Footer /></>
   const images = product.media?.length ? product.media : [{ id: 'fallback', url: product.image, alt: product.name }]

@@ -11,7 +11,7 @@ export async function getProducts(query = ''): Promise<Product[]> {
   return (await getProductPage(query)).items
 }
 
-export type ProductPage = { items: Product[]; pagination: { page: number; limit: number; total: number; totalPages: number } }
+export type ProductPage = { items: Product[]; pagination: { page: number; limit: number; total: number; totalPages: number }; appliedFilters?: { q?: string; category?: string; colourFamily?: string; collection?: string; availability?: string; minPrice?: number; maxPrice?: number; sort: 'newest' | 'oldest' | 'name' } }
 export type ProductFacets = { categories: Array<{ value: string; label: string; count: number }>; colours: Array<{ value: string; count: number }> }
 
 export async function getProductPage(query = ''): Promise<ProductPage> {
