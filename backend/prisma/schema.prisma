@@ -188,3 +188,13 @@ model NewsletterSubscriber {
   email     String   @unique
   createdAt DateTime @default(now())
 }
+
+model AdminAuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String
+  payload   Json?
+  createdAt DateTime @default(now())
+}

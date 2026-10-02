@@ -19,6 +19,7 @@ services:
     environment:
       PORT: 4000
       CLIENT_ORIGIN: https://dev-topan.fluxorastudio.id
+      ADMIN_API_TOKEN: ${DEV_ADMIN_API_TOKEN:-}
       DATABASE_URL: "postgresql://${DEV_POSTGRES_USER}:${DEV_POSTGRES_PASSWORD}@nilam-postgres-dev:5432/${DEV_POSTGRES_DB}"
     ports:
       - "10.10.0.2:5100:4000"
@@ -44,6 +45,7 @@ services:
     environment:
       PORT: 4000
       CLIENT_ORIGIN: https://topan.fluxorastudio.id
+      ADMIN_API_TOKEN: ${PROD_ADMIN_API_TOKEN:-}
       DATABASE_URL: "postgresql://${PROD_POSTGRES_USER}:${PROD_POSTGRES_PASSWORD}@nilam-postgres-prod:5432/${PROD_POSTGRES_DB}"
     ports:
       - "10.10.0.2:5101:4000"

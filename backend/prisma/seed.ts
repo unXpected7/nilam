@@ -1,6 +1,7 @@
 import { PrismaClient, ProductStatus } from '@prisma/client'
 
 const prisma = new PrismaClient()
+const toHandle = (value: string) => value.toLowerCase().replace('&', 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 const products = [
   { name: 'Keana Voal Scarf', handle: 'keana-voal-scarf', category: 'Scarves', description: 'A lightweight voal scarf designed for comfortable, everyday styling.', price: 169000, sku: 'NLM-KEANA-SAGE', image: 'https://images.unsplash.com/photo-1583391733981-84984022984a?auto=format&fit=crop&w=1000&q=80' },
@@ -11,7 +12,7 @@ const products = [
 
 async function main() {
   for (const item of products) {
-    const category = await prisma.category.upsert({ where: { handle: item.category.toLowerCase().replaceAll(' ', '-') }, update: {}, create: { name: item.category, handle: item.category.toLowerCase().replaceAll(' ', '-') } })
+    const category = await prisma.category.upsert({ where: { handle: toHandle(item.category) }, update: {}, create: { name: item.category, handle: toHandle(item.category) } })
     await prisma.product.upsert({
       where: { handle: item.handle },
       update: { name: item.name, description: item.description, categoryId: category.id, status: ProductStatus.ACTIVE },

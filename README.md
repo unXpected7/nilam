@@ -1,34 +1,29 @@
-# Nilam Marketplace
+# Nilam
 
-A full-stack marketplace starter: React + Vite frontend and Express + TypeScript API.
+## Local access
 
-## Start
+Start each service from its own folder:
 
-Open two terminals and install/run each app independently:
-
-```bash
-cd frontend
-npm install
-npm run dev
+```sh
+cd backend && npm run dev
 ```
 
-```bash
-cd backend
-npm install
-npm run db:migrate -- --name init
-npm run db:seed
-npm run dev
+```sh
+cd frontend && npm run dev
 ```
 
-The storefront runs at `http://localhost:5173`; the API runs at `http://localhost:4000`.
+- Storefront: http://localhost:5173/
+- ERP admin (backend UI): http://localhost:4000/
+- API health: http://localhost:4000/api/health
+
+The ERP dashboard is plain HTML, CSS, and JavaScript in `backend/admin-ui/`. It is served by Express. Enter the value of `ADMIN_API_TOKEN` from `backend/.env`; the browser keeps it only for the current session.
 
 ## Structure
 
 ```text
-frontend/  Vite, React, TypeScript marketplace UI
-backend/   Express, TypeScript JSON API
+frontend/        Vite, React, TypeScript storefront
+backend/         Express, TypeScript API and ERP server
+backend/admin-ui Plain HTML, CSS, JavaScript ERP dashboard
 ```
 
-## Use the vm01 development database locally
-
-The backend is configured to connect directly to the vm01 LAN address `192.168.100.35:5436`. Only the development database is exposed to the LAN; production remains VM-local.
+The backend development environment connects directly to the vm01 LAN database at `192.168.100.35:5436`. Only the development database is LAN-exposed.

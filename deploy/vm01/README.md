@@ -21,7 +21,7 @@ Create GitHub Environments named `development` and `production`. The current run
 
 `development.yml` runs for pull requests and pushes targeting `main`; pushes reconcile `postgres-dev` and build/deploy the development frontend and API. `production.yml` runs for pull requests and pushes targeting `prod`; pushes reconcile `postgres-prod` and build/deploy the production frontend and API.
 
-The current workflows use `npm install` while the project has no committed lockfiles. Switch them to `npm ci` after generating and committing `frontend/package-lock.json` and `backend/package-lock.json`.
+The workflows use deterministic `npm ci`; commit both `frontend/package-lock.json` and `backend/package-lock.json` alongside source changes.
 
 ## Self-hosted GitHub Actions runner
 

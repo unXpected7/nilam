@@ -1,10 +1,14 @@
 server {
-    listen 80;
+    listen 443 ssl;
     server_name dev-api-topan.fluxorastudio.id;
+    ssl_certificate /etc/letsencrypt/live/dev-topan-fluxorastudio-id/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dev-topan-fluxorastudio-id/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
     include /etc/nginx/snippets/security-headers.conf;
     client_max_body_size 25M;
 
-    location / {
+    location /api/ {
         proxy_pass http://10.10.0.2:5100;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -12,4 +16,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+    location / {
+        proxy_pass http://10.10.0.2:8091;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
+server { listen 80; server_name dev-api-topan.fluxorastudio.id; return 301 https://$host$request_uri; }
