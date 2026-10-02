@@ -216,7 +216,13 @@ adminRouter.patch('/products/:productId/media/:mediaId', async (request, respons
     const position = request.body?.position === undefined ? undefined : Number(request.body.position)
     if (position !== undefined && (!Number.isInteger(position) || position < 0)) throw new Error('position must be a non-negative integer')
     if (!alt && position === undefined) throw new Error('alt or position is required')
-    const saved = await prisma.productMedia.update({ where: { id: media.id }, data: { ...(alt ? { alt } : {}), ...(position !== undefined ? { position } : {}) } })
+    if (position !== undefined) {
+      const ordered = await prisma.productMedia.findMany({ where: { productId: media.productId }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] })
+      const withoutCurrent = ordered.filter(item => item.id !== media.id)
+      withoutCurrent.splice(Math.min(position, withoutCurrent.length), 0, media)
+      await prisma.$transaction(withoutCurrent.map((item, index) => prisma.productMedia.update({ where: { id: item.id }, data: { position: index, ...(item.id === media.id && alt ? { alt } : {}) } })))
+    } else if (alt) await prisma.productMedia.update({ where: { id: media.id }, data: { alt } })
+    const saved = await prisma.productMedia.findUniqueOrThrow({ where: { id: media.id } })
     await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'product-media.update', entity: 'ProductMedia', entityId: saved.id, payload: { productId: saved.productId, alt: saved.alt, position: saved.position } } })
     response.json(saved)
   } catch (error) { next(error) }
@@ -228,6 +234,8 @@ adminRouter.delete('/products/:productId/media/:mediaId', async (request, respon
     if (!media) { response.status(404).json({ message: 'Product media not found' }); return }
     await deleteStoredMedia(media.objectKey)
     await prisma.productMedia.delete({ where: { id: media.id } })
+    const remaining = await prisma.productMedia.findMany({ where: { productId: media.productId }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] })
+    await prisma.$transaction(remaining.map((item, index) => prisma.productMedia.update({ where: { id: item.id }, data: { position: index } })))
     await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'product-media.delete', entity: 'ProductMedia', entityId: media.id, payload: { productId: media.productId, objectKey: media.objectKey } } })
     response.status(204).end()
   } catch (error) { next(error) }

@@ -1,6 +1,6 @@
 # Phase 3 — Nilam purchase journey and customer accounts
 
-**Status: PLANNED**  
+**Status: IN PROGRESS**
 **Updated: 2026-10-02 (Asia/Jakarta)**
 
 ## Goal
@@ -114,23 +114,34 @@ The reference's collection uses a high-density catalogue with price, colour, and
 
 ## 6. Customer authentication and account
 
+- [x] Add the initial guest-compatible customer authentication foundation: email/password registration and login, scrypt password hashes, opaque hashed session tokens persisted with expiry, HttpOnly/SameSite session cookies, logout, session lookup, and public auth-route rate limiting.
+- [x] Add `/account` and `/account/login` with original Nilam sign-in/registration UI, accessible validation feedback, signed-in state, and header account entry.
 - [ ] Decide whether customer sign-in is password-based only or also supports approved social/passwordless providers. Phase 3 defaults to email/password plus guest checkout to avoid blocking conversion.
 - [ ] Add password hashing with a modern memory-hard algorithm, secure HttpOnly/Secure/SameSite session cookies, session rotation/revocation, email verification, password reset tokens with expiry/single use, login/reset throttling, and account-enumeration-safe responses.
 - [ ] Implement registration, login, logout, forgot/reset password, and authenticated-session endpoints. Add email delivery templates and a development-safe mail transport/testing strategy.
-- [ ] On authenticated sign-in, merge the anonymous cart using defined conflict/stock rules and report any unavailable quantities. Never silently overwrite an existing customer cart.
+- [x] On registration or authenticated sign-in, merge the anonymous cart into the customer cart without overwriting it: combine matching variants, cap quantities against live inventory, remove the anonymous source cart, and report quantities that could not be retained. Authenticated cart reads now use the customer cart and the storefront refreshes it after an auth-state change.
+- [x] Split the implemented sign-in and registration entry points into `/account/login` and `/account/register`; the selected form is URL-addressable and preserves a validated internal return destination.
+- [x] Protect `/account`: guests are redirected to `/account/login` with a local account return path after session resolution, while authentication entry routes remain public.
 - [ ] Add `/account/login`, `/account/register`, `/account/recover`, `/account/reset`, and protected `/account` routes. The login view follows the reference's simple email/password, recovery, and sign-up pathways, with original Nilam wording and accessible feedback.
+- [x] Add authenticated customer profile-name management: `PATCH /api/auth/profile` validates and updates only the current session’s first/last name, while `/account` provides accessible save feedback and never exposes another customer’s record.
+- [x] Add an authenticated change-password flow: it verifies the current password, enforces the existing password policy, re-hashes the replacement, atomically revokes all previous customer sessions, creates a fresh session/cookie, and provides confirmation/error feedback in `/account`.
+- [x] Add a customer-owned saved-address book and default address: authenticated list/create/delete/default endpoints scope every query to the current user, validate Indonesian phone/postal-code and address fields server-side, enforce at most one default per customer with a database partial unique index, promote a replacement on default deletion, and let `/account` save/remove/select addresses with feedback.
+- [x] Add ownership-scoped saved-address editing. `PATCH /api/auth/addresses/:id` revalidates every editable address field and returns 404 for another customer’s address; `/account` now pre-fills the selected address, supports cancel/update feedback, and preserves its default status.
+- [x] Add the authenticated order-history API foundation: `GET /api/auth/orders` returns at most 50 newest orders with only the current customer’s statuses, totals, dates, and item snapshots; a routed order-history UI will follow when checkout creates orders.
 - [ ] Build account profile, password, address-book/default-address, and order-history/order-detail screens. Customers may access only their own data and order records.
-- [ ] Wire the header account control to the correct signed-out/signed-in destination and preserve a safe `returnTo` destination after login.
+- [x] Wire the header account control to `/account` for signed-in shoppers or `/account/login` for guests, preserving a local-path-only `returnTo` destination after authentication.
 
 ## 7. Operations, observability, and migration
 
 - [ ] Store all Nilam product, collection, and editorial storefront images in the `topan-media-prod` bucket and serve published objects only through `https://media-topan.fluxorastudio.id/topan-media-prod/<object-key>`. Do not retain production storefront media on third-party hotlink URLs or application-container filesystems.
 - [x] Enforce bucket-only storefront media reads: public product, recommendation, collection, and cart responses now include only media rows with a managed object key. Temporary external image URLs were removed from seeds and frontend fallbacks; shoppers see a neutral placeholder until an ERP-managed WebP is uploaded.
 - [x] Canonicalize all public media URLs from the configured media host, bucket, and stored object key rather than returning a database URL verbatim. This enforces the `https://media-topan.fluxorastudio.id/topan-media-prod/<object-key>` contract at the API boundary.
+- [x] Render explicit accessible placeholders on product cards, PDPs, and cart lines while media is pending migration/upload, avoiding empty-image network requests; PDP images consume stored dimensions when available to reserve layout space.
 - [x] Add protected ERP media-migration reporting: the dashboard and `/api/admin/media/audit` identify managed-WebP versus legacy product-media records, so staff can track replacement work without serving legacy URLs publicly.
 - [x] Add backend media-storage groundwork: `ProductMedia` records now support object key, content type, dimensions, byte size, and creation metadata; an authenticated product-media upload converts approved JPEG/PNG/WebP source files to WebP before storing them in the configured bucket path.
-- [ ] Accept WebP for published storefront images only. The backend must validate MIME type, decoded image format, dimensions, and size; convert approved source uploads to WebP server-side where the approved workflow permits it; reject unsupported files before an object record is created.
+- [x] Enforce WebP for newly published storefront images: the backend validates MIME type, decoded image format, dimensions, and size; it converts approved JPEG/PNG/WebP uploads server-side to WebP and rejects unsupported files before an object record is created. Existing legacy media still requires the tracked migration before it can be published.
 - [x] Add initial authenticated ERP product-media controls for upload, preview/browse, alt text, position, and deletion, backed by audited API mutations. Replace/unpublish semantics and a standalone cross-product media library remain open.
+- [x] Make ERP gallery ordering deterministic: position edits atomically normalize every media row for the product, and deletion closes ordering gaps before the ordered gallery is returned publicly.
 - [ ] Add an authenticated ERP media library and product-media manager: upload, browse, search, assign/reorder, alt text, replace, unpublish, and safely delete only unreferenced objects. Object-storage credentials must remain server-side and all media changes must be audited.
 - [ ] Create a migration plan for existing product/editorial URLs: inventory every reference, create WebP derivatives, upload with collision-safe object keys, update database records atomically after upload verification, and remove legacy/hotlinked references only after production verification and backup retention approval.
 - [ ] Extend the ERP with read-only order list/detail, payment/fulfilment state visibility, customer contact/order history access, and audited authorised transitions. Separate Phase 3's customer flow from later refund/fulfilment automation if not approved.

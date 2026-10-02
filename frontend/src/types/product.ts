@@ -14,6 +14,6 @@ export type Product = {
 }
 
 export type ProductDetail = Product & {
-  media?: Array<{ id: string; url: string; alt: string }>
+  media?: Array<{ id: string; url: string; alt: string; width?: number | null; height?: number | null }>
   variants?: Array<{ id: string; name: string; sku: string; price: number; inventory?: { quantity: number } }>
 }

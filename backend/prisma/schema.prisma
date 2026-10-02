@@ -29,15 +29,26 @@ enum PaymentStatus {
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  firstName String?
-  lastName  String?
-  addresses Address[]
-  carts     Cart[]
-  orders    Order[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String?
+  firstName    String?
+  lastName     String?
+  addresses    Address[]
+  carts        Cart[]
+  orders       Order[]
+  sessions     CustomerSession[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model CustomerSession {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 model Address {
@@ -53,6 +64,7 @@ model Address {
   province   String
   postalCode String
   country    String   @default("ID")
+  isDefault  Boolean  @default(false)
   createdAt  DateTime @default(now())
 }
 

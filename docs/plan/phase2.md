@@ -84,8 +84,10 @@ Every unfinished Phase 1 deliverable is owned by a Phase 2 section below. Items 
 - [x] Add authenticated server-side product-media upload handling with 10 MB source-size, MIME, decoded-dimension validation, WebP conversion, and backend-only storage credentials configuration.
 - [x] Generate collision-safe product object keys and persist media records with object-key/content-type/dimension/byte metadata only after successful object upload.
 - [x] Derive public storefront media URLs from configured media host, bucket, and object key; never trust a persisted URL as the public source of truth.
+- [x] Replace empty/broken storefront image requests with neutral pending-media placeholders and pass stored dimensions to the PDP image element when available.
 - [ ] Add image optimization/derivatives and safe deletion rules for unreferenced media.
 - [x] Add protected product-media upload, preview, alt-text, position, and deletion controls to the ERP; object-storage credentials remain server-side.
+- [x] Normalize product-media ordering transactionally after a position change or deletion, so the storefront gallery has a stable sequence.
 - [x] Add ERP dashboard counts and a protected audit endpoint for managed versus legacy product-media records.
 
 ## 6. Authentication, roles, and auditability

@@ -25,8 +25,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { request('').then(setCart).catch(() => setCart(null)).finally(() => setLoading(false)) }, [])
   useEffect(() => {
     const revalidate = () => { if (document.visibilityState === 'visible') void refresh().catch(() => undefined) }
+    const reconcileAuthenticatedCart = () => { void refresh().catch(() => undefined) }
     document.addEventListener('visibilitychange', revalidate)
-    return () => document.removeEventListener('visibilitychange', revalidate)
+    window.addEventListener('nilam-auth-change', reconcileAuthenticatedCart)
+    return () => {
+      document.removeEventListener('visibilitychange', revalidate)
+      window.removeEventListener('nilam-auth-change', reconcileAuthenticatedCart)
+    }
   }, [refresh])
   const addItem = useCallback(async (variantId: string, quantity = 1) => setCart(await request('/items', { method: 'POST', body: JSON.stringify({ variantId, quantity }) })), [])
   const updateItem = useCallback(async (id: string, quantity: number) => setCart(await request(`/items/${id}`, { method: 'PATCH', body: JSON.stringify({ quantity }) })), [])

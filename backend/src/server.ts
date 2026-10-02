@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { prisma } from './lib/prisma.js'
 import { requireAdmin } from './middleware/adminAuth.js'
 import { adminRouter } from './routes/admin.js'
+import { authRouter, currentAuthenticatedUser } from './routes/auth.js'
 import { openApiDocument } from './openapi.js'
 
 const app = express()
@@ -69,6 +70,7 @@ app.use(express.json())
 app.get('/swagger.json', (_request, response) => response.json(openApiDocument))
 app.use('/swagger', swaggerUi.serve, swaggerUi.setup(openApiDocument, { customSiteTitle: 'Nilam API documentation' }))
 app.use('/api/admin', rateLimit(30, 60_000), requireAdmin, adminRouter)
+app.use('/api/auth', rateLimit(10, 60_000), authRouter)
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`
@@ -179,10 +181,17 @@ function cartSessionId(req: express.Request, res: express.Response) {
 }
 
 async function currentCart(req: express.Request, res: express.Response) {
+  const include = { items: { include: { variant: { include: { product: { include: { media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' as const } } } }, inventory: true } } }, orderBy: { id: 'asc' as const } } }
+  const user = await currentAuthenticatedUser(req.header('cookie'))
+  if (user) {
+    const existing = await prisma.cart.findFirst({ where: { userId: user.id }, orderBy: { updatedAt: 'desc' }, include })
+    if (existing) return existing
+    return prisma.cart.create({ data: { userId: user.id }, include })
+  }
   const sessionId = cartSessionId(req, res)
   return prisma.cart.upsert({
     where: { sessionId }, create: { sessionId }, update: {},
-    include: { items: { include: { variant: { include: { product: { include: { media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' } } } }, inventory: true } } }, orderBy: { id: 'asc' } } },
+    include,
   })
 }
 
