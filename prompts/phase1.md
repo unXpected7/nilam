@@ -90,6 +90,12 @@ Connection string (already present in `backend/.env`):
 postgresql://nilam:nilam_local_dev@localhost:5435/nilam
 ```
 
+## vm01 environments
+
+Two isolated PostgreSQL services are provisioned and healthy on vm01; they bind only to VM loopback: development on `5436` (`nilam_dev`) and production on `5437` (`nilam_prod`). Deployment configuration lives in `deploy/vm01/`; credentials are generated and stored only in `/home/vm01/nilam/postgres/.env` on the VM. CI/CD uses two workflows: `.github/workflows/development.yml` for `main` → the GitHub `development` Environment and `.github/workflows/production.yml` for `prod` → the protected GitHub `production` Environment.
+
+The local backend connects directly over the LAN to vm01 development at `192.168.100.35:5436`. Production PostgreSQL remains bound to VM loopback only.
+
 ## Current next action
 
-Install workspace dependencies, run `npm run db:migrate -w backend -- --name init`, then run `npm run db:seed -w backend`.
+Resolve the current intermittent npm DNS failure (`ENOTFOUND registry.npmjs.org`), then run `npm install`, `npm run db:migrate -- --name init`, and `npm run db:seed` from `backend/`. Run `npm install` from `frontend/` separately.
