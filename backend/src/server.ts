@@ -1,12 +1,14 @@
 import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
+import swaggerUi from 'swagger-ui-express'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { prisma } from './lib/prisma.js'
 import { requireAdmin } from './middleware/adminAuth.js'
 import { adminRouter } from './routes/admin.js'
+import { openApiDocument } from './openapi.js'
 
 const app = express()
 const port = Number(process.env.PORT) || 4000
@@ -14,7 +16,15 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url))
 const adminUiDirectory = join(currentDirectory, '../admin-ui')
 type StorefrontProduct = {
   id: string; handle: string; name: string; description: string
-  category: { name: string }; variants: Array<{ price: number }>; media: Array<{ url: string }>
+  colourFamily: string | null; undertone: string | null
+  category: { name: string }; variants: Array<{ price: number }>; media: Array<{ objectKey: string | null }>
+}
+
+function managedMediaUrl(objectKey: string | null | undefined) {
+  if (!objectKey) return ''
+  const baseUrl = (process.env.MEDIA_PUBLIC_BASE_URL || 'https://media-topan.fluxorastudio.id').replace(/\/$/, '')
+  const bucket = process.env.MEDIA_BUCKET || 'topan-media-prod'
+  return `${baseUrl}/${bucket}/${objectKey}`
 }
 
 function displayDatabaseUrl(databaseUrl: string | undefined) {
@@ -41,9 +51,24 @@ function paged<T>(items: T[], total: number, page: number, limit: number) {
   return { items, pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) } }
 }
 
+function rateLimit(limit: number, windowMs: number) {
+  const requests = new Map<string, { count: number; resetAt: number }>()
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const key = req.ip || 'unknown'; const now = Date.now(); const record = requests.get(key)
+    const active = record && record.resetAt > now ? record : { count: 0, resetAt: now + windowMs }
+    active.count += 1; requests.set(key, active)
+    res.setHeader('RateLimit-Limit', String(limit)); res.setHeader('RateLimit-Reset', String(Math.ceil(active.resetAt / 1000)))
+    if (active.count > limit) { res.status(429).json({ message: 'Too many requests. Please try again shortly.' }); return }
+    next()
+  }
+}
+
+app.set('trust proxy', 1)
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }))
 app.use(express.json())
-app.use('/api/admin', requireAdmin, adminRouter)
+app.get('/swagger.json', (_request, response) => response.json(openApiDocument))
+app.use('/swagger', swaggerUi.serve, swaggerUi.setup(openApiDocument, { customSiteTitle: 'Nilam API documentation' }))
+app.use('/api/admin', rateLimit(30, 60_000), requireAdmin, adminRouter)
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`
@@ -52,20 +77,34 @@ app.get('/api/health', async (_req, res) => {
     res.status(503).json({ status: 'unavailable', database: 'disconnected' })
   }
 })
-app.get('/api/products', async (req, res, next) => {
+app.get('/api/products', rateLimit(120, 60_000), async (req, res, next) => {
   try {
     const query = String(req.query.q || '').trim()
     const category = String(req.query.category || '').trim()
+    const colourFamily = String(req.query.colourFamily || '').trim()
+    const availability = String(req.query.availability || '').trim()
+    const minPrice = Number(req.query.minPrice)
+    const maxPrice = Number(req.query.maxPrice)
     const { page, limit, skip } = pagination(req.query)
     const sort = String(req.query.sort || 'newest')
+    const price = {
+      ...(Number.isFinite(minPrice) && minPrice >= 0 ? { gte: Math.round(minPrice) } : {}),
+      ...(Number.isFinite(maxPrice) && maxPrice >= 0 ? { lte: Math.round(maxPrice) } : {}),
+    }
+    const variantWhere = {
+      ...(Object.keys(price).length ? { price } : {}),
+      ...(availability === 'in-stock' ? { inventory: { is: { quantity: { gt: 0 } } } } : {}),
+    }
     const where = {
       status: 'ACTIVE' as const,
       ...(category ? { category: { handle: category } } : {}),
+      ...(colourFamily ? { colourFamily: { equals: colourFamily, mode: 'insensitive' as const } } : {}),
+      ...(Object.keys(variantWhere).length ? { variants: { some: variantWhere } } : {}),
       ...(query ? { OR: [{ name: { contains: query, mode: 'insensitive' as const } }, { description: { contains: query, mode: 'insensitive' as const } }] } : {}),
     }
     const [products, total] = await Promise.all([prisma.product.findMany({
       where, skip, take: limit,
-      include: { category: true, variants: { take: 1, orderBy: { price: 'asc' } }, media: { take: 1, orderBy: { position: 'asc' } } },
+      include: { category: true, variants: { take: 1, orderBy: { price: 'asc' } }, media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' } } },
       orderBy: sort === 'oldest' ? { createdAt: 'asc' } : sort === 'name' ? { name: 'asc' } : { createdAt: 'desc' },
     }), prisma.product.count({ where })])
     res.json(paged(products.map((product: StorefrontProduct) => ({
@@ -74,23 +113,58 @@ app.get('/api/products', async (req, res, next) => {
       name: product.name,
       category: product.category.name,
       price: product.variants[0]?.price ?? 0,
-      image: product.media[0]?.url ?? '',
+      image: managedMediaUrl(product.media[0]?.objectKey),
       description: product.description,
+      colourFamily: product.colourFamily,
+      undertone: product.undertone,
     })), total, page, limit))
+  } catch (error) { next(error) }
+})
+app.get('/api/products/facets', rateLimit(120, 60_000), async (_req, res, next) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { colourFamily: true, category: { select: { name: true, handle: true } } },
+    })
+    const categories = new Map<string, { label: string; count: number }>()
+    const colours = new Map<string, number>()
+    for (const product of products) {
+      const category = categories.get(product.category.handle) || { label: product.category.name, count: 0 }
+      category.count += 1; categories.set(product.category.handle, category)
+      if (product.colourFamily) colours.set(product.colourFamily, (colours.get(product.colourFamily) || 0) + 1)
+    }
+    res.json({
+      categories: Array.from(categories, ([value, { label, count }]) => ({ value, label, count })).sort((a, b) => a.label.localeCompare(b.label)),
+      colours: Array.from(colours, ([value, count]) => ({ value, count })).sort((a, b) => a.value.localeCompare(b.value)),
+    })
+  } catch (error) { next(error) }
+})
+app.get('/api/products/:handle/recommendations', rateLimit(120, 60_000), async (req, res, next) => {
+  try {
+    const handle = typeof req.params.handle === 'string' ? req.params.handle : ''
+    const product = await prisma.product.findFirst({ where: { handle, status: 'ACTIVE' }, select: { id: true, categoryId: true } })
+    if (!product) { res.status(404).json({ message: 'Product not found' }); return }
+    const recommendations = await prisma.product.findMany({
+      where: { status: 'ACTIVE', categoryId: product.categoryId, id: { not: product.id } },
+      take: 4,
+      orderBy: { createdAt: 'desc' },
+      include: { category: true, variants: { take: 1, orderBy: { price: 'asc' } }, media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' } } },
+    })
+    res.json(recommendations.map((item: StorefrontProduct) => ({
+      id: item.id, handle: item.handle, name: item.name, category: item.category.name,
+      price: item.variants[0]?.price ?? 0, image: managedMediaUrl(item.media[0]?.objectKey), description: item.description,
+      colourFamily: item.colourFamily, undertone: item.undertone,
+    })))
   } catch (error) { next(error) }
 })
 app.get('/api/products/:handle', async (req, res, next) => {
   try {
     const product = await prisma.product.findFirst({
       where: { handle: req.params.handle, status: 'ACTIVE' },
-      include: { category: true, variants: { include: { inventory: true }, orderBy: { price: 'asc' } }, media: { orderBy: { position: 'asc' } } },
+      include: { category: true, variants: { include: { inventory: true }, orderBy: { price: 'asc' } }, media: { where: { objectKey: { not: null } }, orderBy: { position: 'asc' } } },
     })
     if (!product) { res.status(404).json({ message: 'Product not found' }); return }
-    res.json({
-      ...product,
-      category: product.category.name,
-      image: product.media[0]?.url ?? '',
-    })
+    res.json({ ...product, media: product.media.map(media => ({ ...media, url: managedMediaUrl(media.objectKey) })), category: product.category.name, image: managedMediaUrl(product.media[0]?.objectKey) })
   } catch (error) { next(error) }
 })
 
@@ -108,7 +182,7 @@ async function currentCart(req: express.Request, res: express.Response) {
   const sessionId = cartSessionId(req, res)
   return prisma.cart.upsert({
     where: { sessionId }, create: { sessionId }, update: {},
-    include: { items: { include: { variant: { include: { product: { include: { media: { take: 1, orderBy: { position: 'asc' } } } }, inventory: true } } }, orderBy: { id: 'asc' } } },
+    include: { items: { include: { variant: { include: { product: { include: { media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' } } } }, inventory: true } } }, orderBy: { id: 'asc' } } },
   })
 }
 
@@ -116,7 +190,7 @@ function cartResponse(cart: Awaited<ReturnType<typeof currentCart>>) {
   const items = cart.items.map(item => ({
     id: item.id, quantity: item.quantity,
     variant: { id: item.variant.id, name: item.variant.name, sku: item.variant.sku, price: item.variant.price, available: item.variant.inventory?.quantity ?? 0 },
-    product: { name: item.variant.product.name, handle: item.variant.product.handle, image: item.variant.product.media[0]?.url ?? '' },
+    product: { name: item.variant.product.name, handle: item.variant.product.handle, image: managedMediaUrl(item.variant.product.media[0]?.objectKey) },
   }))
   return { id: cart.id, itemCount: items.reduce((total, item) => total + item.quantity, 0), subtotal: items.reduce((total, item) => total + item.quantity * item.variant.price, 0), items }
 }
@@ -126,6 +200,23 @@ app.get('/api/collections', async (_req, res, next) => {
     const { page, limit, skip } = pagination(_req.query)
     const [collections, total] = await Promise.all([prisma.collection.findMany({ include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' }, skip, take: limit }), prisma.collection.count()])
     res.json(paged(collections.map(collection => ({ ...collection, productCount: collection._count.products })), total, page, limit))
+  } catch (error) { next(error) }
+})
+
+app.get('/api/collections/:handle', async (req, res, next) => {
+  try {
+    const { page, limit, skip } = pagination(req.query)
+    const collection = await prisma.collection.findUnique({ where: { handle: req.params.handle } })
+    if (!collection) { res.status(404).json({ message: 'Collection not found' }); return }
+    const where = { collectionId: collection.id, product: { status: 'ACTIVE' as const } }
+    const [memberships, total] = await Promise.all([prisma.productCollection.findMany({
+      where, skip, take: limit, orderBy: { product: { createdAt: 'desc' } },
+      include: { product: { include: { category: true, variants: { take: 1, orderBy: { price: 'asc' } }, media: { where: { objectKey: { not: null } }, take: 1, orderBy: { position: 'asc' } } } } },
+    }), prisma.productCollection.count({ where })])
+    res.json({
+      id: collection.id, name: collection.name, handle: collection.handle, description: collection.description,
+      ...paged(memberships.map(({ product }) => ({ id: product.id, handle: product.handle, name: product.name, category: product.category.name, price: product.variants[0]?.price ?? 0, image: managedMediaUrl(product.media[0]?.objectKey), description: product.description, colourFamily: product.colourFamily, undertone: product.undertone })), total, page, limit),
+    })
   } catch (error) { next(error) }
 })
 
@@ -139,7 +230,7 @@ app.get('/api/stores', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
-app.post('/api/newsletter', async (req, res, next) => {
+app.post('/api/newsletter', rateLimit(10, 60_000), async (req, res, next) => {
   try {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ message: 'A valid email address is required' }); return }
@@ -148,6 +239,7 @@ app.post('/api/newsletter', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 
+app.use('/api/cart', rateLimit(120, 60_000))
 app.get('/api/cart', async (req, res, next) => {
   try { res.json(cartResponse(await currentCart(req, res))) } catch (error) { next(error) }
 })

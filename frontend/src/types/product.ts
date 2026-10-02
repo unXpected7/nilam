@@ -9,6 +9,8 @@ export type Product = {
   image: string
   condition: string
   description: string
+  colourFamily?: string | null
+  undertone?: string | null
 }
 
 export type ProductDetail = Product & {

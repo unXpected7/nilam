@@ -37,8 +37,9 @@ Every unfinished Phase 1 deliverable is owned by a Phase 2 section below. Items 
 
 - [ ] Commit the plan relocation and the current frontend/backend/deployment changes in coherent commits.
 - [ ] Push `main` and verify the development GitHub Action succeeds.
-- [ ] Deploy the corrected public Nginx configurations to the gateway, run `nginx -t`, and reload Nginx.
-- [ ] Verify publicly: storefront, product API, backend health, ERP sign-in, product create/edit, cart, newsletter, and store locator.
+- [x] Deploy the corrected development public-Nginx backend-domain route, keep a gateway backup, run `nginx -t`, reload Nginx, and verify `https://dev-api-topan.fluxorastudio.id/` serves the ERP.
+- [ ] Deploy/start the production Nilam containers, then verify the production backend-domain route (it currently correctly targets `5101` but returns `502` because those containers are stopped).
+- [ ] Verify public development storefront, product API, backend health, ERP sign-in, product create/edit, cart, newsletter, and store locator flows.
 - [x] Baseline the pre-existing development schema and apply the inventory migration; verify migration deployment succeeds against the existing development database.
 - [ ] Confirm Prisma migrations apply cleanly to a fresh development database.
 
@@ -48,8 +49,9 @@ Every unfinished Phase 1 deliverable is owned by a Phase 2 section below. Items 
 - [ ] Return a consistent API error shape and appropriate status codes across routes.
 - [x] Add bounded pagination to public product, collection, and store endpoints, plus stable newest/oldest/name product sorting.
 - [ ] Add documented filters and pagination/sorting to the remaining admin catalogue and inventory endpoints.
-- [ ] Add public collection detail endpoints and make collection merchandising data-driven.
-- [ ] Add safe request-rate limits for newsletter, cart, search, and admin authentication endpoints.
+- [x] Add a paginated public collection-detail endpoint returning active collection products.
+- [x] Use public collection detail data in storefront collection routes, with category-catalogue fallback for existing category handles.
+- [x] Add proxy-aware fixed-window request-rate limits for public catalogue/search, newsletter, cart, and admin API access.
 - [ ] Add API integration tests for validation, errors, catalogue filters, carts, newsletter, and admin protection.
 
 ## 3. Cart and checkout readiness
@@ -79,10 +81,12 @@ Every unfinished Phase 1 deliverable is owned by a Phase 2 section below. Items 
 ## 5. Media pipeline
 
 - [ ] Create restricted Nilam MinIO credentials for backend use; keep them only in the private environment file.
-- [ ] Add authenticated server-side upload handling with type, size, and image-dimension validation.
-- [ ] Generate collision-safe object keys and persist media records only after successful object upload.
+- [x] Add authenticated server-side product-media upload handling with 10 MB source-size, MIME, decoded-dimension validation, WebP conversion, and backend-only storage credentials configuration.
+- [x] Generate collision-safe product object keys and persist media records with object-key/content-type/dimension/byte metadata only after successful object upload.
+- [x] Derive public storefront media URLs from configured media host, bucket, and object key; never trust a persisted URL as the public source of truth.
 - [ ] Add image optimization/derivatives and safe deletion rules for unreferenced media.
-- [ ] Add protected media upload controls to the ERP; never expose object-storage credentials to browser JavaScript.
+- [x] Add protected product-media upload, preview, alt-text, position, and deletion controls to the ERP; object-storage credentials remain server-side.
+- [x] Add ERP dashboard counts and a protected audit endpoint for managed versus legacy product-media records.
 
 ## 6. Authentication, roles, and auditability
 
@@ -94,18 +98,19 @@ Every unfinished Phase 1 deliverable is owned by a Phase 2 section below. Items 
 
 ## 7. Storefront parity and content
 
-- [ ] Build reusable editorial story cards, specification blocks, product rails, colour/variant explorer, and FAQ accordion.
+- [x] Build reusable editorial story cards, product-principle/specification blocks, product rails, a product-backed style explorer, and accessible FAQ accordion.
 - [ ] Add original category discovery and curated collection-series modules.
-- [ ] Build an original guided style/undertone discovery flow using Nilam product attributes.
+- [x] Add original colour-family and undertone product attributes, seed the Nilam catalogue, and filter the homepage style explorer by undertone.
 - [ ] Replace remaining placeholder/hash actions with intentional routes or remove them.
 - [ ] Add loading, empty, and error states for every data-driven storefront module.
-- [ ] Add approved original/licensed product and editorial imagery; remove temporary Unsplash assets before production launch.
+- [ ] Add approved original/licensed product and editorial imagery through the WebP bucket workflow. Temporary Unsplash URLs have been removed from source/fallback data and blocked from public storefront responses; the remaining legacy database records still require the planned verified migration.
 
 ## 8. Quality gate
 
 - [ ] Add browser tests for mobile navigation, search, product selection, cart flows, newsletter, store search, and ERP product/inventory flows.
 - [ ] Perform visual review at 375 px, 768 px, 1024 px, and 1440 px.
-- [ ] Validate semantic landmarks, labels, focus trapping, Escape handling, keyboard navigation, contrast, and reduced-motion support.
+- [x] Prevent closed header overlays from exposing focusable controls and add global reduced-motion support.
+- [ ] Complete semantic-landmark, label, focus-trap, keyboard-navigation, and contrast audit across all routes.
 - [ ] Add responsive image sizing, below-fold lazy loading, route-level code splitting, and layout-shift protection.
 - [ ] Run dependency/security review and production smoke tests before enabling checkout.
 

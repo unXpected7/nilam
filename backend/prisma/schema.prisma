@@ -78,6 +78,8 @@ model Product {
   description String
   seoTitle    String?
   seoDescription String?
+  colourFamily   String?
+  undertone      String?
   status      ProductStatus       @default(DRAFT)
   archivedAt  DateTime?
   categoryId  String
@@ -103,12 +105,18 @@ model ProductVariant {
 }
 
 model ProductMedia {
-  id        String   @id @default(cuid())
-  productId String
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  url       String
-  alt       String
-  position  Int      @default(0)
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url         String
+  objectKey   String?  @unique
+  contentType String?
+  width       Int?
+  height      Int?
+  bytes       Int?
+  alt         String
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
 }
 
 model ProductCollection {

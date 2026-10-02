@@ -1,8 +1,11 @@
 import { Router } from 'express'
 import { ProductStatus } from '@prisma/client'
+import multer from 'multer'
 import { prisma } from '../lib/prisma.js'
+import { convertAndStoreProductImage, deleteStoredMedia } from '../lib/mediaStorage.js'
 
 export const adminRouter = Router()
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } })
 type AdminProductRow = Record<string, unknown> & {
   category: { name: string }
   variants: Array<{ inventory: { quantity: number } | null }>
@@ -75,13 +78,25 @@ async function collectionIds(value: unknown) {
 
 adminRouter.get('/dashboard', async (_request, response, next) => {
   try {
-    const [productCount, orderCount, pendingOrders, lowStock] = await Promise.all([
+    const [productCount, orderCount, pendingOrders, lowStock, managedMedia, legacyMedia] = await Promise.all([
       prisma.product.count({ where: { status: 'ACTIVE' } }),
       prisma.order.count(),
       prisma.order.count({ where: { status: 'PENDING' } }),
       prisma.inventory.count({ where: { quantity: { lte: 5 } } }),
+      prisma.productMedia.count({ where: { objectKey: { not: null } } }),
+      prisma.productMedia.count({ where: { objectKey: null } }),
     ])
-    response.json({ productCount, orderCount, pendingOrders, lowStock, netSales: 0 })
+    response.json({ productCount, orderCount, pendingOrders, lowStock, netSales: 0, media: { managed: managedMedia, legacy: legacyMedia, total: managedMedia + legacyMedia } })
+  } catch (error) { next(error) }
+})
+
+adminRouter.get('/media/audit', async (_request, response, next) => {
+  try {
+    const [managed, legacy] = await Promise.all([
+      prisma.productMedia.count({ where: { objectKey: { not: null } } }),
+      prisma.productMedia.count({ where: { objectKey: null } }),
+    ])
+    response.json({ managed, legacy, total: managed + legacy, migrationComplete: legacy === 0 })
   } catch (error) { next(error) }
 })
 
@@ -90,7 +105,7 @@ adminRouter.get('/products', async (request, response, next) => {
     const query = String(request.query.q || '').trim()
     const products = await prisma.product.findMany({
       where: query ? { OR: [{ name: { contains: query, mode: 'insensitive' } }, { handle: { contains: query, mode: 'insensitive' } }] } : undefined,
-      include: { category: true, collections: { include: { collection: true } }, variants: { include: { inventory: true }, orderBy: { price: 'asc' } }, media: { take: 1, orderBy: { position: 'asc' } } },
+      include: { category: true, collections: { include: { collection: true } }, variants: { include: { inventory: true }, orderBy: { price: 'asc' } }, media: { orderBy: { position: 'asc' } } },
       orderBy: { updatedAt: 'desc' },
     })
     response.json(products.map((product: AdminProductRow) => ({ ...product, category: product.category.name, image: product.media[0]?.url ?? '', stock: product.variants.reduce((total, variant) => total + (variant.inventory?.quantity ?? 0), 0) })))
@@ -167,6 +182,57 @@ adminRouter.delete('/collections/:id', async (request, response, next) => {
   } catch (error) { next(error) }
 })
 
+adminRouter.get('/products/:id/media', async (request, response, next) => {
+  try {
+    const product = await prisma.product.findUnique({ where: { id: request.params.id }, include: { media: { orderBy: { position: 'asc' } } } })
+    if (!product) { response.status(404).json({ message: 'Product not found' }); return }
+    response.json(product.media)
+  } catch (error) { next(error) }
+})
+
+adminRouter.post('/products/:id/media', upload.single('file'), async (request, response, next) => {
+  let stored: Awaited<ReturnType<typeof convertAndStoreProductImage>> | undefined
+  try {
+    const productId = typeof request.params.id === 'string' ? request.params.id : ''
+    const product = await prisma.product.findUnique({ where: { id: productId } })
+    if (!product) { response.status(404).json({ message: 'Product not found' }); return }
+    if (!request.file) { response.status(400).json({ message: 'An image file is required' }); return }
+    stored = await convertAndStoreProductImage(product.id, request.file)
+    const last = await prisma.productMedia.aggregate({ where: { productId: product.id }, _max: { position: true } })
+    const media = await prisma.productMedia.create({ data: { productId: product.id, ...stored, alt: stringField(request.body?.alt, 'alt', false) || product.name, position: (last._max.position ?? -1) + 1 } })
+    await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'product-media.create', entity: 'ProductMedia', entityId: media.id, payload: { productId: product.id, objectKey: media.objectKey } } })
+    response.status(201).json(media)
+  } catch (error) {
+    if (stored) await deleteStoredMedia(stored.objectKey).catch(() => undefined)
+    next(error)
+  }
+})
+
+adminRouter.patch('/products/:productId/media/:mediaId', async (request, response, next) => {
+  try {
+    const media = await prisma.productMedia.findFirst({ where: { id: request.params.mediaId, productId: request.params.productId } })
+    if (!media) { response.status(404).json({ message: 'Product media not found' }); return }
+    const alt = stringField(request.body?.alt, 'alt', false)
+    const position = request.body?.position === undefined ? undefined : Number(request.body.position)
+    if (position !== undefined && (!Number.isInteger(position) || position < 0)) throw new Error('position must be a non-negative integer')
+    if (!alt && position === undefined) throw new Error('alt or position is required')
+    const saved = await prisma.productMedia.update({ where: { id: media.id }, data: { ...(alt ? { alt } : {}), ...(position !== undefined ? { position } : {}) } })
+    await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'product-media.update', entity: 'ProductMedia', entityId: saved.id, payload: { productId: saved.productId, alt: saved.alt, position: saved.position } } })
+    response.json(saved)
+  } catch (error) { next(error) }
+})
+
+adminRouter.delete('/products/:productId/media/:mediaId', async (request, response, next) => {
+  try {
+    const media = await prisma.productMedia.findFirst({ where: { id: request.params.mediaId, productId: request.params.productId } })
+    if (!media) { response.status(404).json({ message: 'Product media not found' }); return }
+    await deleteStoredMedia(media.objectKey)
+    await prisma.productMedia.delete({ where: { id: media.id } })
+    await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'product-media.delete', entity: 'ProductMedia', entityId: media.id, payload: { productId: media.productId, objectKey: media.objectKey } } })
+    response.status(204).end()
+  } catch (error) { next(error) }
+})
+
 adminRouter.post('/products', async (request, response, next) => {
   try {
     const body = request.body as ProductPayload
@@ -176,7 +242,7 @@ adminRouter.post('/products', async (request, response, next) => {
     const sku = stringField(body.sku, 'sku')
     const price = Number(body.price)
     const quantity = Number(body.quantity)
-    const image = stringField(body.image, 'image', false)
+    if (stringField(body.image, 'image', false)) throw new Error('Upload product media after creating the product; external image URLs are not accepted')
     if (!Number.isInteger(price) || price < 0) throw new Error('price must be a non-negative integer')
     if (!Number.isInteger(quantity) || quantity < 0) throw new Error('quantity must be a non-negative integer')
     const product = await prisma.product.create({
@@ -184,7 +250,6 @@ adminRouter.post('/products', async (request, response, next) => {
         ...fields,
         ...(fields.status === ProductStatus.ARCHIVED ? { archivedAt: new Date() } : {}),
         ...(assignedCollections?.length ? { collections: { create: assignedCollections.map(collectionId => ({ collectionId })) } } : {}),
-        ...(image ? { media: { create: { url: image, alt: fields.name, position: 0 } } } : {}),
         variants: { create: { name: 'Default', sku, price, inventory: { create: { quantity } } } },
       },
     })

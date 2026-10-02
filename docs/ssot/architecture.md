@@ -52,6 +52,7 @@ Repository: /Users/faiz/Documents/private/nilam
 | .github/workflows/production.yml | Verification/deploy on prod |
 | docker-compose.yml | Optional local PostgreSQL 16 on port 5435 |
 | docs/ssot/architecture.md | This system architecture reference |
+| docs/ssot/products.md | Product/catalogue schema, ERD, data rules, and API reference |
 | docs/handover/handover.md | Session handover and current priorities |
 | docs/plan/phase1.md | Phase 1 plan/checklist |
 | docs/plan/phase2.md | Phase 2 plan/checklist and implementation status |
@@ -64,10 +65,10 @@ Frontend and backend are independent npm projects. Each owns package.json and it
 
 - Local Vite address: http://localhost:5173/
 - Deployed frontend containers use Nginx to serve the Vite build.
-- Routes include /, /collections/:handle, /products/:handle, and /search.
+- Routes include /, /collections/:handle, /products/:handle, and /search. Collection routes consume a matching public collection when present and otherwise fall back to category catalogue data. The homepage includes reusable editorial story, principle, product-rail/style-explorer, and FAQ modules.
 - Product reads accept the paginated API envelope and retain fallback catalogue data for unavailable API states.
 - The frontend Nginx template proxies /api/ to the paired Express container using BACKEND_HOST and BACKEND_PORT.
-- Main commerce UI is in progress. Checkout, payment, accounts, and all order/customer workflows are not complete.
+- Main commerce UI is in progress. Closed header overlays are hidden from interaction and global `prefers-reduced-motion` overrides are present; a full keyboard/focus/contrast audit remains. Checkout, payment, accounts, and all order/customer workflows are not complete.
 
 ### 3.2 Express API
 
@@ -77,6 +78,7 @@ Frontend and backend are independent npm projects. Each owns package.json and it
   - GET /api/products?q=&category=&page=&limit=&sort=newest|oldest|name
   - GET /api/products/:handle
   - GET /api/collections?page=&limit=
+  - GET /api/collections/:handle?page=&limit=
   - GET /api/stores?q=&page=&limit=
   - POST /api/newsletter
   - GET /api/cart
@@ -130,7 +132,7 @@ Auth is currently one shared token per environment, not staff identity/roles. Da
 
 ### 3.4 Backend errors and validation
 
-Admin routes validate required strings, enum status, category references, price, and quantities. The server currently maps any thrown Error to HTTP 400; unexpected Prisma/runtime errors should later be distinguished from client validation errors and logged with structured context.
+Admin routes validate required strings, enum status, category references, price, and quantities. Proxy-aware fixed-window limits protect the public product/search endpoint (120/minute), cart (120/minute), newsletter subscription (10/minute), and admin API (30/minute). The server currently maps any thrown Error to HTTP 400; unexpected Prisma/runtime errors should later be distinguished from client validation errors and logged with structured context.
 
 ## 4. Data architecture
 
@@ -151,7 +153,7 @@ Admin routes validate required strings, enum status, category references, price,
 | Address | User shipping/contact address |
 | Category | Product category with unique handle |
 | Collection | Merchandising group with unique handle |
-| Product | Name/handle/description, optional SEO title/description, publication status, archive timestamp, category, and relations |
+| Product | Name/handle/description, optional SEO and colour-family/undertone attributes, publication status, archive timestamp, category, and relations |
 | ProductVariant | Variant name, unique SKU, integer IDR price |
 | ProductMedia | URL, alt text, ordering per product |
 | ProductCollection | Many-to-many product/collection join |
@@ -165,7 +167,7 @@ Admin routes validate required strings, enum status, category references, price,
 | NewsletterSubscriber | Unique email subscription |
 | AdminAuditLog | Actor, action, entity, entity ID, JSON payload, timestamp |
 
-The seed inserts sample categories, products, default variants/inventory, and a Jakarta store. These are Nilam seed examples, not copied reference content.
+The seed inserts sample categories, products with original colour-family/undertone attributes, default variants/inventory, and a Jakarta store. These are Nilam seed examples, not copied reference content.
 
 ### 4.3 Schema migrations
 
@@ -244,7 +246,9 @@ Cloudflare zone: fluxorastudio.id. Application records are proxied to 171.22.173
 | api-topan.fluxorastudio.id | Prod ERP/API | 10.10.0.2:5101 |
 | media-topan.fluxorastudio.id | Public Nilam media | 10.10.0.2:9001 |
 
-The backend hostname must route both root and /api/ to its environment’s Express container so the ERP loads at the base URL. Check versioned api vhost configs before deployment; older configuration may have routed root to the frontend. Storefront hosts route root to frontend Nginx; frontend Nginx sends /api/ to Express.
+The backend hostname must route both root and /api/ to its environment’s Express container so the ERP loads at the base URL. Storefront hosts route root to frontend Nginx; frontend Nginx sends /api/ to Express.
+
+Verified on 2026-10-02: the public gateway development route was corrected, tested with `nginx -t`, reloaded, and confirmed live: `https://dev-api-topan.fluxorastudio.id/` returns the Express-hosted Nilam Admin UI while `https://dev-topan.fluxorastudio.id/` returns the storefront. Gateway backups of the prior development/production backend vhosts were retained with a `bak-20261002` suffix. The production backend vhost also now targets `10.10.0.2:5101`, but `https://api-topan.fluxorastudio.id/` returns `502` until the production Nilam containers are deployed and running; do not start them from uncommitted source.
 
 TLS:
 

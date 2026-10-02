@@ -1,0 +1,18 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { FiArrowLeft, FiShoppingBag, FiTrash2 } from 'react-icons/fi'
+import { Footer } from '../components/Footer'
+import { Header } from '../components/Header'
+import { useCart } from '../lib/cart'
+import './cart.css'
+
+const rupiah = (value: number) => `Rp ${value.toLocaleString('id-ID')}`
+
+export function CartPage() {
+  const { cart, loading, updateItem, removeItem } = useCart()
+  const [pendingItem, setPendingItem] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const items = cart?.items ?? []
+  const mutate = async (id: string, action: () => Promise<void>) => { setError(''); setPendingItem(id); try { await action() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to update your bag.') } finally { setPendingItem(null) } }
+  return <><Header /><main className="cart-page"><Link className="back-link" to="/collections/all"><FiArrowLeft /> Continue shopping</Link><div className="cart-heading"><div><p className="eyebrow">Your selection</p><h1>Your bag</h1></div><span>{loading ? 'Loading…' : `${cart?.itemCount ?? 0} ${cart?.itemCount === 1 ? 'piece' : 'pieces'}`}</span></div>{error && <p className="cart-error" role="alert">{error}</p>}{loading ? <p className="cart-loading">Loading your bag…</p> : items.length ? <div className="cart-layout"><section className="cart-lines" aria-label="Cart items">{items.map(item => { const pending = pendingItem === item.id; return <article key={item.id} className="cart-line" aria-busy={pending}><Link to={`/products/${item.product.handle}`}><img src={item.product.image} alt="" /></Link><div className="cart-line-copy"><Link to={`/products/${item.product.handle}`}><h2>{item.product.name}</h2></Link><p>{item.variant.name}</p><strong>{rupiah(item.variant.price)}</strong>{item.quantity > item.variant.available && <p className="stock-warning" role="alert">Only {item.variant.available} currently available.</p>}<div className="cart-line-actions"><div className="quantity-control" aria-label={`Quantity for ${item.product.name}`}><button type="button" onClick={() => void mutate(item.id, () => updateItem(item.id, item.quantity - 1))} aria-label="Decrease quantity" disabled={pending}>−</button><output>{item.quantity}</output><button type="button" onClick={() => void mutate(item.id, () => updateItem(item.id, item.quantity + 1))} aria-label="Increase quantity" disabled={pending || item.quantity >= item.variant.available}>+</button></div><button type="button" className="remove-item" onClick={() => void mutate(item.id, () => removeItem(item.id))} disabled={pending}><FiTrash2 /> {pending ? 'Updating…' : 'Remove'}</button></div></div><p className="cart-line-total">{rupiah(item.variant.price * item.quantity)}</p></article> })}</section><aside className="cart-summary"><h2>Order summary</h2><p><span>Subtotal</span><strong>{rupiah(cart?.subtotal ?? 0)}</strong></p><p><span>Delivery</span><span>Calculated at checkout</span></p><p className="cart-summary-total"><span>Total</span><strong>{rupiah(cart?.subtotal ?? 0)}</strong></p><small>Taxes and delivery are confirmed once you enter a delivery address.</small><button className="button" type="button" disabled aria-describedby="checkout-note">Checkout is being prepared</button><small id="checkout-note">Online checkout is not available yet.</small><Link className="text-link" to="/collections/all">Keep shopping</Link></aside></div> : <section className="cart-empty"><FiShoppingBag /><h2>Your bag is waiting</h2><p>Discover pieces made for every day and every meaningful occasion.</p><Link className="button" to="/collections/all">Browse all pieces</Link></section>}</main><Footer /></>
+}
