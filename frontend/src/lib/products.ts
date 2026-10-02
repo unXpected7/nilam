@@ -10,5 +10,6 @@ export const fallbackProducts: Product[] = [
 export async function getProducts(query = ''): Promise<Product[]> {
   const response = await fetch(`/api/products${query ? `?${query}` : ''}`)
   if (!response.ok) throw new Error('Unable to load products')
-  return response.json() as Promise<Product[]>
+  const body = await response.json() as Product[] | { items: Product[] }
+  return Array.isArray(body) ? body : body.items
 }

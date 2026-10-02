@@ -8,6 +8,7 @@ import { fallbackProducts, getProducts } from './lib/products'
 import type { Product } from './types/product'
 import { CollectionPage, SearchPage } from './pages/Catalogue'
 import { ProductPage } from './pages/ProductPage'
+import { ContentPage, StoresPage } from './pages/ContentPages'
 import './App.css'
 
 function HomePage() {
@@ -20,6 +21,6 @@ function HomePage() {
 }
 
 function App() {
-  return <Routes><Route path="/" element={<HomePage />} /><Route path="/collections/:handle" element={<CollectionPage />} /><Route path="/products/:handle" element={<ProductPage />} /><Route path="/search" element={<SearchPage />} /><Route path="*" element={<HomePage />} /></Routes>
+  return <Routes><Route path="/" element={<HomePage />} /><Route path="/collections/:handle" element={<CollectionPage />} /><Route path="/products/:handle" element={<ProductPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/pages/stores" element={<StoresPage />} /><Route path="/pages/about" element={<ContentPage page="about" />} /><Route path="/pages/terms" element={<ContentPage page="terms" />} /><Route path="/pages/privacy" element={<ContentPage page="privacy" />} /><Route path="*" element={<HomePage />} /></Routes>
 }
 export default App

@@ -76,7 +76,10 @@ model Product {
   name        String
   handle      String              @unique
   description String
+  seoTitle    String?
+  seoDescription String?
   status      ProductStatus       @default(DRAFT)
+  archivedAt  DateTime?
   categoryId  String
   category    Category            @relation(fields: [categoryId], references: [id])
   variants    ProductVariant[]
@@ -117,11 +120,25 @@ model ProductCollection {
 }
 
 model Inventory {
-  id        String         @id @default(cuid())
-  variantId String         @unique
-  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  quantity  Int            @default(0)
-  updatedAt DateTime       @updatedAt
+  id                String              @id @default(cuid())
+  variantId         String              @unique
+  variant           ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity          Int                 @default(0)
+  lowStockThreshold Int                 @default(5)
+  movements         InventoryMovement[]
+  updatedAt         DateTime            @updatedAt
+}
+
+model InventoryMovement {
+  id               String    @id @default(cuid())
+  inventoryId      String
+  inventory        Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  previousQuantity Int
+  quantity         Int
+  delta            Int
+  reason           String
+  actor            String
+  createdAt        DateTime  @default(now())
 }
 
 model Cart {

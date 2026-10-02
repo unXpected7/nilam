@@ -17,7 +17,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     location / {
-        proxy_pass http://10.10.0.2:8092;
+        proxy_pass http://10.10.0.2:5101;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $http_cf_connecting_ip;
