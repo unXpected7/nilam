@@ -27,3 +27,20 @@ Create GitHub Environments named `development` and `production`. Configure the f
 `development.yml` runs for pull requests and pushes targeting `main`; pushes reconcile only `postgres-dev`. `production.yml` runs for pull requests and pushes targeting `prod`; pushes reconcile only `postgres-prod`. Protect the `production` Environment with required reviewers in GitHub before use. Application deployment will be added after the frontend and API containers are defined.
 
 The current workflows use `npm install` while the project has no committed lockfiles. Switch them to `npm ci` after generating and committing `frontend/package-lock.json` and `backend/package-lock.json`.
+
+## Self-hosted GitHub Actions runner
+
+The dedicated runner is registered as `nilam-vm01` in `/home/vm01/nilam-actions-runner`, with labels `self-hosted`, `linux`, `x64`, and `nilam`. Both workflow files target it with:
+
+```yaml
+runs-on: [self-hosted, linux, x64, nilam]
+```
+
+It is currently running as the `vm01` user. To make it start automatically after a VM reboot, run this once on vm01 with an account that can use sudo:
+
+```bash
+cd ~/nilam-actions-runner
+sudo ./svc.sh install
+sudo ./svc.sh start
+sudo ./svc.sh status
+```

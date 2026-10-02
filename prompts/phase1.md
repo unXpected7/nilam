@@ -96,6 +96,8 @@ Two isolated PostgreSQL services are provisioned and healthy on vm01; they bind 
 
 The local backend connects directly over the LAN to vm01 development at `192.168.100.35:5436`. Production PostgreSQL remains bound to VM loopback only.
 
+GitHub Actions runs on the self-hosted vm01 runner `nilam-vm01` (labels: `self-hosted`, `linux`, `x64`, `nilam`). It is running as the vm01 user; a one-time sudo service installation is required for automatic startup after VM reboot.
+
 ## Current next action
 
 Resolve the current intermittent npm DNS failure (`ENOTFOUND registry.npmjs.org`), then run `npm install`, `npm run db:migrate -- --name init`, and `npm run db:seed` from `backend/`. Run `npm install` from `frontend/` separately.
