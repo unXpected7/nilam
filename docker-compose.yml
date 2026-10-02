@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nilam-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nilam
+      POSTGRES_USER: nilam
+      POSTGRES_PASSWORD: nilam_local_dev
+    ports:
+      - "5435:5432"
+    volumes:
+      - nilam_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nilam -d nilam"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  nilam_postgres_data:

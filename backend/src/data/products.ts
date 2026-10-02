@@ -1,0 +1,6 @@
+export const products = [
+  { id: '1', name: 'Handwoven rattan bowl', category: 'Home & living', price: 285000, seller: 'Rumah Rupa', location: 'Bandung', image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&w=800&q=80', condition: 'New', description: 'Made by hand from natural rattan.' },
+  { id: '2', name: 'Linen camp collar shirt', category: 'Fashion', price: 420000, seller: 'Kolektif', location: 'Jakarta', image: 'https://images.unsplash.com/photo-1626497764746-6dc36546b388?auto=format&fit=crop&w=800&q=80', condition: 'New', description: 'Easy, breathable linen shirt.' },
+  { id: '3', name: 'Vintage teak side table', category: 'Furniture', price: 850000, seller: 'Second Sunday', location: 'Yogyakarta', image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=800&q=80', condition: 'Pre-loved', description: 'A finely aged solid-teak piece.' },
+  { id: '4', name: 'Stoneware coffee set', category: 'Home & living', price: 325000, seller: 'Bumi Studio', location: 'Malang', image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=800&q=80', condition: 'New', description: 'A four-piece ceramic coffee set.' },
+]

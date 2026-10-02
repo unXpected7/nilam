@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus { DRAFT ACTIVE ARCHIVED }
+enum OrderStatus { PENDING PAID FULFILLED CANCELLED REFUNDED }
+enum PaymentStatus { PENDING PAID FAILED REFUNDED }
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  firstName String?
+  lastName  String?
+  addresses Address[]
+  carts     Cart[]
+  orders    Order[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label      String?
+  recipient  String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  province   String
+  postalCode String
+  country    String   @default("ID")
+  createdAt  DateTime @default(now())
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  handle   String    @unique
+  products Product[]
+}
+
+model Collection {
+  id          String              @id @default(cuid())
+  name        String
+  handle      String              @unique
+  description String?
+  products    ProductCollection[]
+}
+
+model Product {
+  id          String              @id @default(cuid())
+  name        String
+  handle      String              @unique
+  description String
+  status      ProductStatus       @default(DRAFT)
+  categoryId  String
+  category    Category            @relation(fields: [categoryId], references: [id])
+  variants    ProductVariant[]
+  media       ProductMedia[]
+  collections ProductCollection[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model ProductVariant {
+  id        String    @id @default(cuid())
+  productId String
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  sku       String    @unique
+  price     Int
+  inventory Inventory?
+  cartItems CartItem[]
+  orderItems OrderItem[]
+  createdAt DateTime  @default(now())
+}
+
+model ProductMedia {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  position  Int      @default(0)
+}
+
+model ProductCollection {
+  productId    String
+  collectionId String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  @@id([productId, collectionId])
+}
+
+model Inventory {
+  id        String         @id @default(cuid())
+  variantId String         @unique
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int            @default(0)
+  updatedAt DateTime       @updatedAt
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId String?    @unique
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String         @id @default(cuid())
+  cartId    String
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int            @default(1)
+  @@unique([cartId, variantId])
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email         String
+  status        OrderStatus   @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  subtotal      Int
+  shipping      Int           @default(0)
+  total         Int
+  items         OrderItem[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model OrderItem {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  name      String
+  sku       String
+  price     Int
+  quantity  Int
+}
+
+model Store {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  province  String
+  phone     String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
