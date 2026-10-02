@@ -27,3 +27,8 @@ backend/admin-ui Plain HTML, CSS, JavaScript ERP dashboard
 ```
 
 The backend development environment connects directly to the vm01 LAN database at `192.168.100.35:5436`. Only the development database is LAN-exposed.
+
+
+<!-- npm run db:generate
+npm run db:seed
+npm run dev -->

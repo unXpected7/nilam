@@ -1,0 +1,47 @@
+# media-topan.fluxorastudio.id — public delivery for Nilam's topan-media-prod MinIO bucket.
+# Origin path: public Nginx → vm01 MinIO bridge → vm02 MinIO.
+server {
+    listen 80;
+    server_name media-topan.fluxorastudio.id;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name media-topan.fluxorastudio.id;
+
+    ssl_certificate /etc/letsencrypt/live/media-topan.fluxorastudio.id/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/media-topan.fluxorastudio.id/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    include /etc/nginx/snippets/security-headers.conf;
+
+    client_max_body_size 25M;
+
+    # Only Nilam's public bucket is exposed by this hostname.
+    location /topan-media-prod/ {
+        proxy_pass http://10.10.0.2:9001/topan-media-prod/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_hide_header Access-Control-Allow-Origin;
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Range, Content-Type" always;
+        add_header Cache-Control "public, max-age=604800, immutable" always;
+    }
+
+    location / {
+        return 404;
+    }
+}

@@ -66,7 +66,8 @@ The current reference storefront contains:
 - [x] Build an initial backend-hosted admin dashboard with token sign-in, summary metrics, product search, inventory listing, and audited stock adjustments.
 - [x] Build the initial product-management workflow: protected product create/edit APIs, category selection, handles, descriptions, publication status, default SKU, price, opening stock, optional image, and audit records.
 - [x] Add category create/edit controls and safe deletion that prevents removal while products still belong to the category.
-- [ ] Extend product management with collection CRUD, multi-variant SKU/pricing controls, media upload, SEO metadata, and archival safeguards.
+- [x] Add collection create/edit controls and safe deletion that prevents removal while products still belong to the collection.
+- [ ] Extend product management with product-to-collection assignment, multi-variant SKU/pricing controls, media upload, SEO metadata, and archival safeguards.
 - [ ] Build inventory management: on-hand stock, stock adjustments with an audit trail, low-stock thresholds, and inventory movement history per SKU.
 - [ ] Build order operations: order list/detail, payment status, fulfilment status, refunds/cancellations, and customer/order notes.
 - [ ] Build customer, store-location, newsletter, and content-management screens.
@@ -87,6 +88,7 @@ The current reference storefront contains:
 | API | Express 5, TypeScript |
 | Database | PostgreSQL 16; local backend connects to the vm01 development instance over LAN |
 | ORM | Prisma 6.17; schema, seed source, API persistence layer, and container bootstrap are implemented |
+| Product media | The dedicated vm02 MinIO bucket topan-media-prod is public-read and media-topan.fluxorastudio.id is live through Cloudflare/Nginx; backend-only credentials and upload handling are required before enabling uploads |
 | Images | Original Nilam product/editorial assets or appropriately licensed assets only |
 | Styling | Component-scoped CSS plus shared design tokens; no copied reference CSS |
 | Admin | Plain HTML/CSS/JavaScript ERP control centre in `backend/admin-ui`, served by Express at the backend base URL and backed by protected `/api/admin` endpoints |

@@ -1,0 +1,1 @@
+/Users/faiz/Documents/private/nilam/docs/ssot/architecture.md pls update here the current architecture, whole system

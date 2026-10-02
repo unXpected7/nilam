@@ -78,7 +78,7 @@ app.get('/api/products/:handle', async (req, res, next) => {
   } catch (error) { next(error) }
 })
 app.use(express.static(adminUiDirectory))
-app.get('/', (_req, res) => res.sendFile(join(adminUiDirectory, 'index.html')))
+app.get(['/', '/dashboard', '/products', '/categories', '/collections', '/inventory'], (_req, res) => res.sendFile(join(adminUiDirectory, 'index.html')))
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(error)
   if (error instanceof Error) {

@@ -1,173 +1,54 @@
-const state = { token: sessionStorage.getItem('nilam_admin_token') || '', categories: [], products: [] }
-const loginView = document.querySelector('#login-view')
-const appView = document.querySelector('#app-view')
-const tokenInput = document.querySelector('#token-input')
-const loginError = document.querySelector('#login-error')
-const productDialog = document.querySelector('#product-dialog')
-const productForm = document.querySelector('#product-form')
+const state = { token: sessionStorage.getItem('nilam_admin_token') || '', products: [], categories: [], edit: null }
+const $ = selector => document.querySelector(selector)
+const content = $('#page-content')
+const pages = { '/dashboard': ['Overview', 'ERP control centre'], '/products': ['Products', 'Catalogue'], '/categories': ['Categories', 'Catalogue structure'], '/collections': ['Collections', 'Merchandising'], '/inventory': ['Inventory', 'Stock control'] }
+const escapeHtml = value => { const element = document.createElement('span'); element.textContent = String(value ?? ''); return element.innerHTML }
+const rupiah = value => 'Rp ' + Number(value || 0).toLocaleString('id-ID')
 
 async function api(path, options = {}) {
-  const response = await fetch('/api/admin' + path, {
-    ...options,
-    headers: { 'x-admin-token': state.token, 'content-type': 'application/json', ...(options.headers || {}) },
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.message || 'Request failed')
-  }
-  return response.json()
+  const response = await fetch('/api/admin' + path, { ...options, headers: { 'x-admin-token': state.token, 'content-type': 'application/json', ...(options.headers || {}) } })
+  if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.message || 'Request failed (' + response.status + ')') }
+  return response.status === 204 ? null : response.json()
+}
+function notify(message, error = false) { const node = $('#toast'); node.textContent = message; node.className = 'toast' + (error ? ' toast-error' : ''); node.hidden = false; clearTimeout(notify.timer); notify.timer = setTimeout(() => { node.hidden = true }, 3500) }
+function table(head, rows) { return '<div class="table-wrap"><table><thead><tr>' + head.map(item => '<th>' + item + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>' }
+function activeNav(path) { document.querySelectorAll('[data-route]').forEach(item => item.classList.toggle('active', item.dataset.route === path)) }
+function go(path) { const route = pages[path] ? path : '/dashboard'; if (location.pathname !== route) history.pushState({}, '', route); render() }
+function loading() { content.innerHTML = '<div class="empty-state"><span class="spinner"></span><p>Loading workspace…</p></div>' }
+
+async function dashboard() {
+  const data = await api('/dashboard')
+  const cards = [['Net sales', rupiah(data.netSales)], ['Orders', data.orderCount], ['Active products', data.productCount], ['Low stock', data.lowStock]]
+  content.innerHTML = '<section class="metrics">' + cards.map(card => '<article class="metric"><span>' + card[0] + '</span><strong>' + card[1] + '</strong><small>Current environment</small></article>').join('') + '</section><section class="dashboard-grid"><article class="panel"><p class="eyebrow">Quick actions</p><h2>Keep the catalogue moving</h2><p class="muted">Work from dedicated pages instead of one long dashboard.</p><div class="button-row"><button data-go="/products">Add product</button><button class="secondary" data-go="/inventory">Adjust stock</button></div></article><article class="panel"><p class="eyebrow">Order queue</p><h2>' + data.pendingOrders + ' pending orders</h2><p class="muted">Order management will appear here as orders arrive.</p></article></section>'
 }
 
-function rupiah(value) { return 'Rp ' + Number(value).toLocaleString('id-ID') }
-function escapeHtml(value) { const item = document.createElement('span'); item.textContent = String(value); return item.innerHTML }
-function setValue(selector, value) { document.querySelector(selector).value = value || '' }
-
-function renderMetrics(data) {
-  const cards = [['Net sales', rupiah(data.netSales)], ['Orders', data.orderCount], ['Catalogue', data.productCount], ['Low stock', data.lowStock]]
-  document.querySelector('#overview').innerHTML = cards.map(([label, value]) => '<article class="metric"><span>' + label + '</span><strong>' + value + '</strong><small>Current environment</small></article>').join('')
+function productRows(items) { return items.length ? items.map(item => '<tr><td><strong>' + escapeHtml(item.name) + '</strong><br><small>/' + escapeHtml(item.handle) + '</small></td><td>' + escapeHtml(item.category) + '</td><td><span class="status ' + String(item.status).toLowerCase() + '">' + escapeHtml(item.status) + '</span></td><td>' + item.stock + '</td><td><button class="secondary small" data-edit-product="' + item.id + '">Edit</button></td></tr>').join('') : '<tr><td colspan="5">No products found.</td></tr>' }
+async function products() {
+  state.products = await api('/products')
+  content.innerHTML = '<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Catalogue</p><h2>Products</h2><p class="muted">Manage product details, publishing status, and stock.</p></div><div class="product-actions"><input id="product-search" type="search" placeholder="Search products" /><button id="new-product" type="button">New product</button></div></div>' + table(['Product', 'Category', 'Status', 'Stock', ''], productRows(state.products)) + '</section>'
+  $('#new-product').addEventListener('click', () => openProduct())
+  $('#product-search').addEventListener('input', event => { const q = event.target.value.toLowerCase(); content.querySelector('tbody').innerHTML = productRows(state.products.filter(item => item.name.toLowerCase().includes(q) || item.handle.toLowerCase().includes(q))) })
 }
 
-function renderProducts(items) {
-  state.products = items
-  document.querySelector('#products-body').innerHTML = items.length
-    ? items.map(item => '<tr><td>' + escapeHtml(item.name) + '<br><small>/' + escapeHtml(item.handle) + '</small></td><td>' + escapeHtml(item.category) + '</td><td><span class="status">' + escapeHtml(item.status) + '</span></td><td>' + item.stock + '</td><td><button class="edit-product" data-id="' + item.id + '">Edit</button></td></tr>').join('')
-    : '<tr><td colspan="5">No products found.</td></tr>'
-  document.querySelectorAll('.edit-product').forEach(button => button.addEventListener('click', () => openProductEditor(state.products.find(item => item.id === button.dataset.id))))
+function manager(kind, items) {
+  const isCollection = kind === 'collections'; const singular = isCollection ? 'Collection' : 'Category'; const edit = state.edit || {}
+  const description = isCollection ? '<label>Description<input name="description" value="' + escapeHtml(edit.description || '') + '" /></label>' : ''
+  const rows = items.length ? items.map(item => '<tr><td><strong>' + escapeHtml(item.name) + '</strong></td><td>/' + escapeHtml(item.handle) + '</td>' + (isCollection ? '<td>' + escapeHtml(item.description || '—') + '</td>' : '') + '<td>' + item._count.products + '</td><td><button class="secondary small" data-edit-' + kind + '="' + item.id + '">Edit</button> <button class="danger small" data-delete-' + kind + '="' + item.id + '">Delete</button></td></tr>').join('') : '<tr><td colspan="5">No ' + kind + ' yet.</td></tr>'
+  const headers = isCollection ? ['Collection', 'Handle', 'Description', 'Products', ''] : ['Category', 'Handle', 'Products', '']
+  content.innerHTML = '<section class="panel"><div class="panel-heading"><div><p class="eyebrow">' + (isCollection ? 'Merchandising' : 'Catalogue structure') + '</p><h2>' + singular + ' management</h2></div></div><form id="manager-form" class="inline-form"><label>Name<input name="name" required value="' + escapeHtml(edit.name || '') + '" /></label><label>Handle<input name="handle" required pattern="[a-z0-9-]+" value="' + escapeHtml(edit.handle || '') + '" /></label>' + description + '<div class="form-actions"><button>' + (edit.id ? 'Save changes' : 'Add ' + singular.toLowerCase()) + '</button>' + (edit.id ? '<button class="secondary" id="cancel-edit" type="button">Cancel</button>' : '') + '</div></form><p id="manager-error" class="error" role="alert"></p>' + table(headers, rows) + '</section>'
+  $('#manager-form').addEventListener('submit', async event => { event.preventDefault(); try { await api('/' + kind + (edit.id ? '/' + edit.id : ''), { method: edit.id ? 'PATCH' : 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); state.edit = null; notify(edit.id ? 'Changes saved.' : singular + ' added.'); render() } catch (error) { $('#manager-error').textContent = error.message } })
+  $('#cancel-edit')?.addEventListener('click', () => { state.edit = null; render() })
 }
+async function inventory() { const items = await api('/inventory'); const rows = items.length ? items.map(item => '<tr><td><strong>' + escapeHtml(item.product) + '</strong></td><td>' + escapeHtml(item.variant) + '<br><small>' + escapeHtml(item.sku) + '</small></td><td><form class="stock-editor" data-variant="' + item.id + '"><input name="quantity" type="number" min="0" step="1" value="' + item.quantity + '" /><button class="small">Save</button></form></td></tr>').join('') : '<tr><td colspan="3">No inventory records found.</td></tr>'; content.innerHTML = '<section class="panel"><div class="panel-heading"><div><p class="eyebrow">Stock control</p><h2>Inventory</h2><p class="muted">Changes are recorded in the audit log.</p></div></div>' + table(['Product', 'Variant / SKU', 'Quantity'], rows) + '</section>'; document.querySelectorAll('.stock-editor').forEach(form => form.addEventListener('submit', async event => { event.preventDefault(); try { await api('/inventory/' + form.dataset.variant, { method: 'PATCH', body: JSON.stringify({ quantity: Number(new FormData(form).get('quantity')) }) }); notify('Inventory updated.'); render() } catch (error) { notify(error.message, true) } })) }
 
-function renderInventory(items) {
-  document.querySelector('#inventory-body').innerHTML = items.length ? items.map(item => '<tr><td>' + escapeHtml(item.product) + '</td><td>' + escapeHtml(item.variant) + '<br><small>' + escapeHtml(item.sku) + '</small></td><td><form class="stock-editor" data-variant="' + escapeHtml(item.id) + '"><input type="number" min="0" step="1" value="' + item.quantity + '" aria-label="Quantity for ' + escapeHtml(item.sku) + '"><button>Save</button></form></td><td></td></tr>').join('') : '<tr><td colspan="4">No inventory records found.</td></tr>'
-  document.querySelectorAll('.stock-editor').forEach(form => form.addEventListener('submit', async event => {
-    event.preventDefault()
-    const button = form.querySelector('button')
-    button.disabled = true
-    try {
-      await api('/inventory/' + form.dataset.variant, { method: 'PATCH', body: JSON.stringify({ quantity: Number(form.querySelector('input').value) }) })
-      await Promise.all([loadInventory(), loadProducts()])
-    } catch (error) { alert(error.message) } finally { button.disabled = false }
-  }))
-}
+async function render() { const path = pages[location.pathname] ? location.pathname : '/dashboard'; if (path !== location.pathname) history.replaceState({}, '', path); const meta = pages[path]; $('#page-title').textContent = meta[0]; $('#page-eyebrow').textContent = meta[1]; activeNav(path); loading(); try { if (path === '/dashboard') await dashboard(); if (path === '/products') await products(); if (path === '/categories' || path === '/collections') manager(path.slice(1), await api(path)); if (path === '/inventory') await inventory() } catch (error) { content.innerHTML = '<div class="empty-state"><h2>Unable to load this page</h2><p>' + escapeHtml(error.message) + '</p><button onclick="location.reload()">Try again</button></div>' } }
 
-function renderCategories(items) {
-  document.querySelector('#categories-body').innerHTML = items.length
-    ? items.map(item => '<tr><td>' + escapeHtml(item.name) + '</td><td>/' + escapeHtml(item.handle) + '</td><td>' + item._count.products + '</td><td><button class="edit-category" data-id="' + item.id + '">Edit</button> <button class="delete-category secondary" data-id="' + item.id + '">Delete</button></td></tr>').join('')
-    : '<tr><td colspan="4">No categories yet.</td></tr>'
-  document.querySelectorAll('.edit-category').forEach(button => button.addEventListener('click', () => editCategory(state.categories.find(item => item.id === button.dataset.id))))
-  document.querySelectorAll('.delete-category').forEach(button => button.addEventListener('click', () => deleteCategory(state.categories.find(item => item.id === button.dataset.id))))
-}
+async function openProduct(product) { try { state.categories = await api('/categories'); $('#product-form').reset(); $('#product-id').value = product?.id || ''; $('#product-name').value = product?.name || ''; $('#product-handle').value = product?.handle || ''; $('#product-description').value = product?.description || ''; $('#product-status').value = product?.status || 'DRAFT'; $('#product-category').innerHTML = state.categories.map(item => '<option value="' + item.id + '">' + escapeHtml(item.name) + '</option>').join(''); if (product) $('#product-category').value = state.categories.find(item => item.name === product.category)?.id || ''; $('#product-dialog-title').textContent = product ? 'Edit product' : 'New product'; document.querySelectorAll('.new-only').forEach(node => { node.hidden = Boolean(product); node.querySelectorAll('input').forEach(input => { input.required = !product && input.id !== 'product-image' }) }); $('#product-dialog').showModal() } catch (error) { notify(error.message, true) } }
 
-async function loadCategories() {
-  state.categories = await api('/categories')
-  document.querySelector('#product-category').innerHTML = state.categories.map(category => '<option value="' + category.id + '">' + escapeHtml(category.name) + '</option>').join('')
-  renderCategories(state.categories)
-}
-async function loadProducts(query = '') { renderProducts(await api('/products?q=' + encodeURIComponent(query))) }
-async function loadInventory() { renderInventory(await api('/inventory')) }
-
-function openProductEditor(product) {
-  document.querySelector('#product-error').textContent = ''
-  productForm.reset()
-  setValue('#product-id', product?.id)
-  setValue('#product-name', product?.name)
-  setValue('#product-handle', product?.handle)
-  setValue('#product-description', product?.description)
-  setValue('#product-status', product?.status || 'DRAFT')
-  if (product) {
-    const category = state.categories.find(item => item.name === product.category)
-    setValue('#product-category', category?.id)
-  }
-  document.querySelector('#product-dialog-title').textContent = product ? 'Edit product' : 'New product'
-  document.querySelectorAll('.new-only').forEach(field => { field.hidden = Boolean(product); field.querySelectorAll('input').forEach(input => { input.required = !product && input.id !== 'product-image' }) })
-  productDialog.showModal()
-}
-
-function editCategory(category) {
-  setValue('#category-id', category.id)
-  setValue('#category-name', category.name)
-  setValue('#category-handle', category.handle)
-  document.querySelector('#category-save').textContent = 'Save category'
-  document.querySelector('#category-cancel').hidden = false
-  document.querySelector('#category-name').focus()
-}
-
-function resetCategoryForm() {
-  document.querySelector('#category-form').reset()
-  setValue('#category-id', '')
-  document.querySelector('#category-error').textContent = ''
-  document.querySelector('#category-save').textContent = 'Add category'
-  document.querySelector('#category-cancel').hidden = true
-}
-
-async function deleteCategory(category) {
-  if (!confirm('Delete “' + category.name + '”? Categories with products cannot be deleted.')) return
-  try {
-    await api('/categories/' + category.id, { method: 'DELETE' })
-    await loadCategories()
-  } catch (error) { alert(error.message) }
-}
-
-async function openApp() {
-  try {
-    const [dashboard] = await Promise.all([api('/dashboard'), loadCategories(), loadProducts(), loadInventory()])
-    renderMetrics(dashboard)
-    loginView.hidden = true
-    appView.hidden = false
-    loginError.textContent = ''
-  } catch (error) {
-    sessionStorage.removeItem('nilam_admin_token')
-    state.token = ''
-    loginError.textContent = error.message === 'Admin API is not configured' ? 'Admin access is not configured in backend/.env.' : 'Invalid admin token.'
-  }
-}
-
-document.querySelector('#login-form').addEventListener('submit', event => {
-  event.preventDefault()
-  state.token = tokenInput.value
-  sessionStorage.setItem('nilam_admin_token', state.token)
-  openApp()
-})
-document.querySelector('#sign-out').addEventListener('click', () => {
-  sessionStorage.removeItem('nilam_admin_token')
-  state.token = ''
-  tokenInput.value = ''
-  appView.hidden = true
-  loginView.hidden = false
-})
-document.querySelector('#product-search').addEventListener('input', event => loadProducts(event.target.value).catch(error => alert(error.message)))
-document.querySelector('#new-product').addEventListener('click', () => openProductEditor())
-document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', () => productDialog.close()))
-document.querySelector('#category-cancel').addEventListener('click', resetCategoryForm)
-document.querySelector('#category-form').addEventListener('submit', async event => {
-  event.preventDefault()
-  const id = document.querySelector('#category-id').value
-  const button = document.querySelector('#category-save')
-  button.disabled = true
-  try {
-    await api(id ? '/categories/' + id : '/categories', { method: id ? 'PATCH' : 'POST', body: JSON.stringify({ name: document.querySelector('#category-name').value, handle: document.querySelector('#category-handle').value }) })
-    resetCategoryForm()
-    await loadCategories()
-  } catch (error) { document.querySelector('#category-error').textContent = error.message } finally { button.disabled = false }
-})
-productForm.addEventListener('submit', async event => {
-  event.preventDefault()
-  const id = document.querySelector('#product-id').value
-  const payload = {
-    name: document.querySelector('#product-name').value,
-    handle: document.querySelector('#product-handle').value,
-    categoryId: document.querySelector('#product-category').value,
-    status: document.querySelector('#product-status').value,
-    description: document.querySelector('#product-description').value,
-    sku: document.querySelector('#product-sku').value,
-    price: document.querySelector('#product-price').value,
-    quantity: document.querySelector('#product-quantity').value,
-    image: document.querySelector('#product-image').value,
-  }
-  const save = document.querySelector('#product-save')
-  save.disabled = true
-  try {
-    await api(id ? '/products/' + id : '/products', { method: id ? 'PATCH' : 'POST', body: JSON.stringify(payload) })
-    productDialog.close()
-    await Promise.all([loadProducts(), loadInventory()])
-  } catch (error) { document.querySelector('#product-error').textContent = error.message } finally { save.disabled = false }
-})
-if (state.token) { tokenInput.value = state.token; openApp() }
+document.addEventListener('click', event => { const target = event.target.closest('[data-route], [data-go], [data-edit-product], [data-edit-categories], [data-edit-collections], [data-delete-categories], [data-delete-collections]'); if (!target) return; if (target.dataset.route) { event.preventDefault(); go(target.dataset.route); return } if (target.dataset.go) { go(target.dataset.go); return } if (target.dataset.editProduct) { openProduct(state.products.find(item => item.id === target.dataset.editProduct)); return } const kind = target.dataset.editCategories || target.dataset.deleteCategories ? 'categories' : 'collections'; const id = target.dataset.editCategories || target.dataset.editCollections || target.dataset.deleteCategories || target.dataset.deleteCollections; if (target.dataset.deleteCategories || target.dataset.deleteCollections) { if (confirm('Delete this item?')) api('/' + kind + '/' + id, { method: 'DELETE' }).then(() => { notify('Deleted.'); render() }).catch(error => notify(error.message, true)) } else api('/' + kind).then(items => { state.edit = items.find(item => item.id === id); render() }) })
+$('#login-form').addEventListener('submit', async event => { event.preventDefault(); state.token = $('#token-input').value.trim(); try { await api('/dashboard'); sessionStorage.setItem('nilam_admin_token', state.token); $('#login-view').hidden = true; $('#app-view').hidden = false; go('/dashboard') } catch (error) { $('#login-error').textContent = error.message === 'Admin authentication required' ? 'Invalid admin token.' : 'Cannot reach the admin API. Start the backend and try again.' } })
+$('#sign-out').addEventListener('click', () => { sessionStorage.removeItem('nilam_admin_token'); state.token = ''; $('#app-view').hidden = true; $('#login-view').hidden = false; history.replaceState({}, '', '/') })
+document.querySelectorAll('.close-dialog').forEach(button => button.addEventListener('click', () => $('#product-dialog').close()))
+$('#product-form').addEventListener('submit', async event => { event.preventDefault(); const id = $('#product-id').value; try { await api('/products' + (id ? '/' + id : ''), { method: id ? 'PATCH' : 'POST', body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) }); $('#product-dialog').close(); notify(id ? 'Product updated.' : 'Product created.'); go('/products') } catch (error) { $('#product-error').textContent = error.message } })
+window.addEventListener('popstate', render)
+if (state.token) { $('#login-view').hidden = true; $('#app-view').hidden = false; render() }

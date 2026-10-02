@@ -14,6 +14,7 @@ type ProductPayload = {
   sku?: unknown; price?: unknown; quantity?: unknown; image?: unknown
 }
 type CategoryPayload = { name?: unknown; handle?: unknown }
+type CollectionPayload = { name?: unknown; handle?: unknown; description?: unknown }
 
 function stringField(value: unknown, field: string, required = true) {
   const result = typeof value === 'string' ? value.trim() : ''
@@ -25,6 +26,14 @@ function categoryFields(body: CategoryPayload) {
   return {
     name: stringField(body.name, 'name'),
     handle: stringField(body.handle, 'handle').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, ''),
+  }
+}
+
+function collectionFields(body: CollectionPayload) {
+  return {
+    name: stringField(body.name, 'name'),
+    handle: stringField(body.handle, 'handle').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, ''),
+    description: stringField(body.description, 'description', false) || null,
   }
 }
 
@@ -99,6 +108,41 @@ adminRouter.delete('/categories/:id', async (request, response, next) => {
     if (category._count.products > 0) { response.status(409).json({ message: 'Move or archive its products before deleting this category' }); return }
     await prisma.category.delete({ where: { id: category.id } })
     await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'category.delete', entity: 'Category', entityId: category.id, payload: { handle: category.handle } } })
+    response.status(204).end()
+  } catch (error) { next(error) }
+})
+
+adminRouter.get('/collections', async (_request, response, next) => {
+  try {
+    response.json(await prisma.collection.findMany({ include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' } }))
+  } catch (error) { next(error) }
+})
+
+adminRouter.post('/collections', async (request, response, next) => {
+  try {
+    const collection = await prisma.collection.create({ data: collectionFields(request.body as CollectionPayload) })
+    await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'collection.create', entity: 'Collection', entityId: collection.id, payload: { handle: collection.handle } } })
+    response.status(201).json(collection)
+  } catch (error) { next(error) }
+})
+
+adminRouter.patch('/collections/:id', async (request, response, next) => {
+  try {
+    const existing = await prisma.collection.findUnique({ where: { id: request.params.id } })
+    if (!existing) { response.status(404).json({ message: 'Collection not found' }); return }
+    const collection = await prisma.collection.update({ where: { id: existing.id }, data: collectionFields(request.body as CollectionPayload) })
+    await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'collection.update', entity: 'Collection', entityId: collection.id, payload: { handle: collection.handle } } })
+    response.json(collection)
+  } catch (error) { next(error) }
+})
+
+adminRouter.delete('/collections/:id', async (request, response, next) => {
+  try {
+    const collection = await prisma.collection.findUnique({ where: { id: request.params.id }, include: { _count: { select: { products: true } } } })
+    if (!collection) { response.status(404).json({ message: 'Collection not found' }); return }
+    if (collection._count.products > 0) { response.status(409).json({ message: 'Remove its products before deleting this collection' }); return }
+    await prisma.collection.delete({ where: { id: collection.id } })
+    await prisma.adminAuditLog.create({ data: { actor: 'token-admin', action: 'collection.delete', entity: 'Collection', entityId: collection.id, payload: { handle: collection.handle } } })
     response.status(204).end()
   } catch (error) { next(error) }
 })
