@@ -30,7 +30,7 @@ MIDTRANS_API_BASE_URL=https://api.sandbox.midtrans.com
 BITESHIP_ENVIRONMENT=test
 BITESHIP_API_TOKEN=[configured locally]
 BITESHIP_API_BASE_URL=https://api.biteship.com
-BITESHIP_ALLOWED_COURIERS=jne,jnt
+# Checkout and ERP fulfilment are fixed to JNE and J&T by the approved Phase 4 policy.
 BITESHIP_ORIGIN_CONTACT_NAME=Nilam Store
 BITESHIP_ORIGIN_CONTACT_EMAIL=nilam-store-dev@fluxorastudio.id
 BITESHIP_ORIGIN_ADDRESS=Jl Raya Jalingkos, Area Sawah, Kendalserut, Kec. Slawi, Kabupaten Tegal, Jawa Tengah 52412, Indonesia

@@ -13,19 +13,20 @@
       <section class="login-card">
         <p class="eyebrow">ERP control centre</p><h1>Admin access</h1>
         <p>Sign in with your authorised Nilam ERP staff account.</p>
-        <form id="login-form"><label>Email<input id="email-input" type="email" autocomplete="username" required /></label><label>Password<input id="password-input" type="password" autocomplete="current-password" required /></label><p id="login-error" class="error" role="alert"></p><button>Open workspace</button></form>
+        <form id="login-form"><label>Email<input id="email-input" type="email" autocomplete="username" required /></label><label>Password<input id="password-input" type="password" autocomplete="current-password" required /></label><p id="login-error" class="error" role="alert"></p><button>Open workspace</button><a class="identity-link" href="/erp/request-password-reset">Forgot password?</a></form>
       </section>
     </main>
     <main id="app-view" class="app-view" hidden>
       <aside class="sidebar">
         <a class="brand" href="/dashboard">nilam<span>.</span><small>admin</small></a>
         <nav aria-label="Admin navigation">
-          <a data-route="/dashboard" data-permission="dashboard.read" href="/dashboard">Overview</a><a data-route="/products" data-permission="catalogue.read" href="/products">Products</a><a data-route="/categories" data-permission="catalogue.read" href="/categories">Categories</a><a data-route="/collections" data-permission="catalogue.read" href="/collections">Collections</a><a data-route="/inventory" data-permission="inventory.read" href="/inventory">Inventory</a>
+          <a data-route="/dashboard" data-permission="dashboard.read" href="/dashboard">Overview</a><a data-route="/products" data-permission="catalogue.read" href="/products">Products</a><a data-route="/categories" data-permission="catalogue.read" href="/categories">Categories</a><a data-route="/collections" data-permission="catalogue.read" href="/collections">Collections</a><a data-route="/inventory" data-permission="inventory.read" href="/inventory">Inventory</a><a data-route="/inventory/imports" data-permission="inventory.import" href="/inventory/imports">Stock imports</a><a data-route="/orders" data-permission="orders.read" href="/orders">Orders</a><a data-route="/staff" data-permission="staff.manage" href="/staff">Staff access</a><a data-route="/audit" data-permission="audit.read" href="/audit">Access audit</a>
         </nav>
-        <p class="sidebar-note">Local environment<br /><span>Token session active</span></p>
+        <p class="sidebar-note">Staff session<br /><span id="staff-identity">Not signed in</span></p>
+        <div class="sidebar-actions" aria-label="Account controls"><button id="manage-mfa" type="button">Set up MFA</button><button id="change-password" type="button">Change password</button><button id="sign-out" type="button">Sign out</button></div>
       </aside>
       <section class="content">
-        <header class="topbar"><div><p id="page-eyebrow" class="eyebrow">ERP control centre</p><h1 id="page-title">Overview</h1></div><button id="sign-out" class="secondary" type="button">Sign out</button></header>
+        <header class="topbar"><div><p id="page-eyebrow" class="eyebrow">ERP control centre</p><h1 id="page-title">Overview</h1></div></header>
         <div id="toast" class="toast" role="status" aria-live="polite" hidden></div><div id="page-content" aria-live="polite"></div>
       </section>
     </main>

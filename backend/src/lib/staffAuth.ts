@@ -27,6 +27,8 @@ export async function currentStaff(cookieHeader: string | undefined) {
   const token = readStaffToken(cookieHeader)
   if (!token) return null
   const session = await prisma.staffSession.findUnique({ where: { tokenHash: hash(token) }, include: { staff: { include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } } } })
-  if (!session || !session.staff.active || session.expiresAt <= new Date()) return null
+  if (!session) return null
+  if (session.expiresAt <= new Date()) { await prisma.staffSession.delete({ where: { id: session.id } }).catch(() => undefined); return null }
+  if (!session.staff.active) return null
   return { staff: session.staff, permissions: new Set(session.staff.roles.flatMap(item => item.role.permissions.map(grant => grant.permission.key))) }
 }

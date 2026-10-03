@@ -11,8 +11,11 @@ import { adminRouter } from './routes/admin.js'
 import { authRouter, currentAuthenticatedUser } from './routes/auth.js'
 import { staffAuthRouter } from './routes/staffAuth.js'
 import { openApiDocument } from './openapi.js'
+import { getBiteshipRates } from './lib/biteship.js'
+import { calculateTax, checkoutConfig } from './lib/checkoutConfig.js'
+import { processNextInventoryImportJob } from './lib/inventoryImportJobs.js'
 
-const app = express()
+export const app = express()
 const port = Number(process.env.PORT) || 4000
 const currentDirectory = dirname(fileURLToPath(import.meta.url))
 const adminUiDirectory = join(currentDirectory, '../admin-ui')
@@ -84,14 +87,15 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  if (!req.path.startsWith('/swagger')) res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'")
+  if (process.env.NODE_ENV === 'production') res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
   next()
 })
 app.use((req, res, next) => {
   const existing = readCookie(req.header('cookie'), 'nilam_csrf')
   const token = existing || randomBytes(32).toString('base64url')
   if (!existing) res.append('Set-Cookie', `nilam_csrf=${token}; ${cookieAttributes()}`)
-  const cookieAuthenticatedWrite = !req.path.startsWith('/api/admin/') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)
-  if (cookieAuthenticatedWrite && req.header('x-csrf-token') !== token) {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.header('x-csrf-token') !== token) {
     res.status(403).json({ message: 'Your session could not be verified. Refresh the page and try again.' })
     return
   }
@@ -341,8 +345,29 @@ app.delete('/api/cart/items/:id', async (req, res, next) => {
     res.json(cartResponse(await currentCart(req, res)))
   } catch (error) { next(error) }
 })
+
+app.post('/api/checkout/quote', rateLimit(10, 60_000), async (req, res, next) => {
+  try {
+    const postalCode = typeof req.body?.postalCode === 'string' ? req.body.postalCode.trim() : ''
+    if (!/^\d{5}$/.test(postalCode)) { res.status(400).json({ message: 'Enter a valid 5-digit Indonesian delivery postal code' }); return }
+    const cart = await currentCart(req, res)
+    if (!cart.items.length) { res.status(409).json({ message: 'Your cart is empty' }); return }
+    const unavailable = cart.items.find(item => item.quantity > (item.variant.inventory?.quantity ?? 0))
+    if (unavailable) { res.status(409).json({ message: `${unavailable.variant.product.name} no longer has the requested quantity` }); return }
+    const config = checkoutConfig()
+    const subtotal = cart.items.reduce((sum, item) => sum + item.quantity * item.variant.price, 0)
+    const couriers = 'jne,jnt'
+    const rates = await getBiteshipRates({
+      origin_postal_code: config.originPostalCode,
+      destination_postal_code: postalCode,
+      couriers,
+      items: cart.items.map(item => ({ name: item.variant.product.name, value: item.variant.price, quantity: item.quantity, weight: config.itemWeightGrams })),
+    })
+    res.json({ cartId: cart.id, subtotal, tax: calculateTax(subtotal), itemWeightGrams: config.itemWeightGrams, rates })
+  } catch (error) { next(error) }
+})
 app.use(express.static(adminUiDirectory))
-app.get(['/', '/dashboard', '/products', '/categories', '/collections', '/inventory'], (_req, res) => res.sendFile(join(adminUiDirectory, 'index.html')))
+app.get(['/', '/dashboard', '/products', '/categories', '/collections', '/inventory', '/inventory/imports', '/orders', '/staff', '/audit', '/erp/accept-invitation', '/erp/request-password-reset', '/erp/reset-password', '/erp/change-password', '/erp/mfa'], (_req, res) => res.sendFile(join(adminUiDirectory, 'index.html')))
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const message = error instanceof Error ? error.message : 'An unexpected error occurred'
   console.error(JSON.stringify({ event: 'request_error', requestId: res.locals.requestId, message }))
@@ -352,7 +377,13 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   }
   res.status(500).json({ message: 'An unexpected error occurred' })
 })
-app.listen(port, () => {
-  console.log(`Nilam API listening on http://localhost:${port}`)
-  console.log(`Database URL: ${displayDatabaseUrl(process.env.DATABASE_URL)}`)
-})
+if (process.env.NODE_ENV !== 'test') {
+  const importJobIntervalMs = 2_000
+  const runInventoryImportWorker = () => { void processNextInventoryImportJob().catch(error => console.error(JSON.stringify({ event: 'inventory_import_worker_failed', message: error instanceof Error ? error.message : 'unknown' }))) }
+  setInterval(runInventoryImportWorker, importJobIntervalMs).unref()
+  runInventoryImportWorker()
+  app.listen(port, () => {
+    console.log(`Nilam API listening on http://localhost:${port}`)
+    console.log(`Database URL: ${displayDatabaseUrl(process.env.DATABASE_URL)}`)
+  })
+}

@@ -9,5 +9,6 @@ docs/external/keys/*
 !docs/external/keys/README.md
 !*.env.example
 .npm-cache
+backend/test-results/
 .DS_Store
 prompts

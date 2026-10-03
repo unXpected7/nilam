@@ -196,7 +196,7 @@ authRouter.get('/orders', async (request, response, next) => {
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      select: { id: true, status: true, paymentStatus: true, subtotal: true, shipping: true, total: true, createdAt: true, items: { select: { id: true, name: true, sku: true, price: true, quantity: true } } },
+      select: { id: true, orderNumber: true, status: true, paymentStatus: true, fulfillmentStatus: true, subtotal: true, discount: true, shipping: true, tax: true, total: true, createdAt: true, items: { select: { id: true, name: true, sku: true, price: true, quantity: true } } },
     })
     response.json({ items: orders, limit: 50 })
   } catch (error) { next(error) }
@@ -206,9 +206,9 @@ authRouter.get('/orders/:id', async (request, response, next) => {
   try {
     const user = await currentAuthenticatedUser(request.header('cookie'))
     if (!user) { response.status(401).json({ message: 'Please sign in to view your order' }); return }
-    const order = await prisma.order.findFirst({ where: { id: request.params.id, userId: user.id }, select: { id: true, status: true, paymentStatus: true, subtotal: true, shipping: true, total: true, createdAt: true, items: { select: { id: true, name: true, sku: true, price: true, quantity: true } } } })
+    const order = await prisma.order.findFirst({ where: { id: request.params.id, userId: user.id }, select: { id: true, orderNumber: true, status: true, paymentStatus: true, fulfillmentStatus: true, subtotal: true, discount: true, shipping: true, tax: true, total: true, shippingAddress: true, shippingMethod: true, createdAt: true, items: { select: { id: true, name: true, sku: true, price: true, quantity: true } }, events: { orderBy: { createdAt: 'asc' }, select: { id: true, event: true, createdAt: true } } } })
     if (!order) { response.status(404).json({ message: 'Order not found' }); return }
-    response.json({ ...order, events: [] })
+    response.json(order)
   } catch (error) { next(error) }
 })
 

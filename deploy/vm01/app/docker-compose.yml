@@ -18,9 +18,19 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4000
+      NODE_ENV: production
       CLIENT_ORIGIN: https://dev-topan.fluxorastudio.id
-      ADMIN_API_TOKEN: ${DEV_ADMIN_API_TOKEN:-}
+      ERP_PUBLIC_URL: https://dev-api-topan.fluxorastudio.id
+      ERP_IDENTITY_TOKEN_EXPIRY_HOURS: 24
+      ERP_REQUIRE_MFA_FOR_PRIVILEGED: "false"
+      ERP_MFA_ENCRYPTION_KEY: ${DEV_ERP_MFA_ENCRYPTION_KEY:-}
       DATABASE_URL: "postgresql://${DEV_POSTGRES_USER}:${DEV_POSTGRES_PASSWORD}@nilam-postgres-dev:5432/${DEV_POSTGRES_DB}"
+      BREVO_API_KEY: ${DEV_BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${DEV_BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${DEV_BREVO_SENDER_NAME:-Nilam}
+      MIDTRANS_SERVER_KEY: ${DEV_MIDTRANS_SERVER_KEY:-}
+      MIDTRANS_CLIENT_KEY: ${DEV_MIDTRANS_CLIENT_KEY:-}
+      BITESHIP_API_TOKEN: ${DEV_BITESHIP_API_TOKEN:-}
     ports:
       - "10.10.0.2:5100:4000"
     networks: [postgres]
@@ -44,9 +54,19 @@ services:
     restart: unless-stopped
     environment:
       PORT: 4000
+      NODE_ENV: production
       CLIENT_ORIGIN: https://topan.fluxorastudio.id
-      ADMIN_API_TOKEN: ${PROD_ADMIN_API_TOKEN:-}
+      ERP_PUBLIC_URL: https://api-topan.fluxorastudio.id
+      ERP_IDENTITY_TOKEN_EXPIRY_HOURS: 24
+      ERP_REQUIRE_MFA_FOR_PRIVILEGED: "true"
+      ERP_MFA_ENCRYPTION_KEY: ${PROD_ERP_MFA_ENCRYPTION_KEY:-}
       DATABASE_URL: "postgresql://${PROD_POSTGRES_USER}:${PROD_POSTGRES_PASSWORD}@nilam-postgres-prod:5432/${PROD_POSTGRES_DB}"
+      BREVO_API_KEY: ${PROD_BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${PROD_BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${PROD_BREVO_SENDER_NAME:-Nilam}
+      MIDTRANS_SERVER_KEY: ${PROD_MIDTRANS_SERVER_KEY:-}
+      MIDTRANS_CLIENT_KEY: ${PROD_MIDTRANS_CLIENT_KEY:-}
+      BITESHIP_API_TOKEN: ${PROD_BITESHIP_API_TOKEN:-}
     ports:
       - "10.10.0.2:5101:4000"
     networks: [postgres]

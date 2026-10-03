@@ -1,7 +1,7 @@
 # Nilam external integrations — Midtrans payments and Biteship shipping
 
-**Status: PLANNED — credentials and commercial approval required**  
-**Updated: 2026-10-02 (Asia/Jakarta)**
+**Status: IN PROGRESS — sandbox credentials configured; checkout endpoints pending**  
+**Updated: 2026-10-03 (Asia/Jakarta)**
 
 This guide is the implementation contract for Phase 3 checkout and Phase 4 order operations. Integrations must be server-side: browser code receives only a Midtrans Snap token and approved delivery choices, never provider secrets.
 

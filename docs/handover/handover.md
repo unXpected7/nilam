@@ -1,5 +1,16 @@
 # Nilam — session handover / technical source of truth
 
+> **Current-state addendum — 2026-10-03 (Asia/Jakarta).** Read this before the older historical content below.
+>
+> - Phase 3 remains in progress. `20261003100000_checkout_order_snapshots` now exists and adds checkout quotes, immutable order number/address/shipping snapshots, fulfilment status, shipments, and order events. Do not create a duplicate checkout-snapshot migration.
+> - Midtrans sandbox, Biteship test, and Brevo sandbox credentials are configured only in ignored `backend/.env`. Their source files under `docs/external/` are Git-ignored. Never print, commit, or copy their keys.
+> - Server-only primitives exist in `backend/src/lib/midtrans.ts`, `biteship.ts`, `brevo.ts`, and `checkoutConfig.ts`. Midtrans Snap and notification verification, Biteship rate/shipment calls, and Brevo email sending are **not yet exposed through checkout routes**.
+> - Approved commerce policy: online-only Indonesia service; Biteship origin is Jl Raya Jalingkos, Kendalserut, Slawi, Tegal, Central Java 52412; rates limited to JNE/J&T; tax is configurable at 11%; Midtrans methods are QRIS, GoPay, ShopeePay, and bank VA; support/sender is `nilam-store-dev@fluxorastudio.id`.
+> - Voucher foundation/migrations exist. Default policy is configurable: 20%, Rp200.000 minimum, Rp30.000 cap, seven days, 4–6 alphanumeric code, once per authenticated customer. Voucher ERP CRUD and checkout redemption remain open.
+> - Phase 4 has staff/RBAC schema, role/permission seeds, HttpOnly staff login/session/logout/session lookup, TOTP MFA enrollment/login verification, invitation/recovery, permission-aware ERP navigation, durable stock-import jobs, and order operations. Interactive ERP access does not use `ADMIN_API_TOKEN`; the legacy compatibility path has been removed.
+> - Current immediate priority: implement `POST /api/checkout/quote` using `CheckoutQuote`, current cart, server-side tax, and Biteship JNE/J&T rate filtering; then idempotent order creation, Midtrans webhook, and Biteship shipment/webhook. See `docs/external/docs.md` and `docs/plan/external.md`.
+> - Run `cd backend && npm run db:generate && npm run build` after schema changes. Preserve the heavily dirty worktree; do not reset/checkout unrelated work.
+
 Last updated: 2026-10-02 (Asia/Jakarta)
 
 This document is for a new agent/model taking over Nilam. Treat it as the operational context for the project. Do **not** put passwords, database URLs containing passwords, GitHub runner registration tokens, Cloudflare tokens, or SSH private keys into commits or chat summaries.
@@ -56,9 +67,9 @@ Local addresses:
 | Storefront | `http://localhost:5173/` | Vite React UI |
 | ERP admin | `http://localhost:4000/` | Plain backend HTML/CSS/JS UI, served by Express |
 | API health | `http://localhost:4000/api/health` | Checks Prisma database connectivity |
-| Admin APIs | `http://localhost:4000/api/admin/*` | Requires `x-admin-token` |
+| Admin APIs | `http://localhost:4000/api/admin/*` | Requires an HttpOnly staff-session cookie and route-level permission |
 
-The ERP UI authenticates using `ADMIN_API_TOKEN` from the local `backend/.env` file and holds it only in browser session storage. A backend restart is required after modifying `.env`.
+The ERP UI authenticates through `/api/erp/auth` using HttpOnly staff-session cookies and does not store a token in browser storage. Privileged production actions require a staff TOTP factor enrolled with an environment-specific `ERP_MFA_ENCRYPTION_KEY`. A backend restart is required after modifying `.env`.
 
 Useful checks:
 
@@ -92,7 +103,7 @@ Customer browser ──> Vite frontend locally / Nginx frontend container when d
 
 Admin browser ──> Express root (/; static backend/admin-ui)
                     │
-                    └── /api/admin/* (x-admin-token) ──> Prisma ──> PostgreSQL
+                    └── /api/admin/* (staff cookie + RBAC) ──> Prisma ──> PostgreSQL
 ```
 
 ### Frontend
@@ -105,7 +116,7 @@ Admin browser ──> Express root (/; static backend/admin-ui)
 ### Backend and ERP
 
 - `backend/src/server.ts` configures Express, CORS, JSON parsing, public product routes, protected admin routes, static `backend/admin-ui`, and the root ERP page.
-- `backend/src/middleware/adminAuth.ts` verifies `x-admin-token` against `ADMIN_API_TOKEN` using timing-safe comparison.
+- `backend/src/middleware/adminAuth.ts` resolves a signed-in staff session; the admin router applies route-level permissions. Shared-token authentication is not supported.
 - `backend/src/routes/admin.ts` currently provides:
   - `GET /api/admin/dashboard`
   - `GET|POST /api/admin/categories`
@@ -116,7 +127,7 @@ Admin browser ──> Express root (/; static backend/admin-ui)
   - `PATCH /api/admin/products/:id`
   - `GET /api/admin/inventory`
   - `PATCH /api/admin/inventory/:variantId`
-- Admin UI currently supports token sign-in, dashboard metrics, product search/create/edit, category and collection create/edit/safe-delete, inventory listing, and audited stock adjustment.
+- Admin UI supports staff sign-in/TOTP verification, password recovery, MFA enrollment, dashboard metrics, product search/create/edit, category and collection create/edit/safe-delete, inventory listing/import jobs, and audited stock adjustment.
 - Product creation currently creates one `Default` variant, SKU, price, and opening inventory. Multi-variant and media management remain future work.
 - Admin mutations insert `AdminAuditLog` records.
 
@@ -161,7 +172,7 @@ Remote private environment file:
 /home/vm01/nilam/postgres/.env
 ```
 
-That file is the secret source of truth for VM database credentials and separate `DEV_ADMIN_API_TOKEN` / `PROD_ADMIN_API_TOKEN`. Keep it mode 600 and never commit it.
+That file is the secret source of truth for VM database credentials and environment-scoped provider and MFA values, including `DEV_ERP_MFA_ENCRYPTION_KEY` and `PROD_ERP_MFA_ENCRYPTION_KEY`. Keep it mode 600 and never commit it.
 
 | Environment | Database container | Database name | Reachability |
 | --- | --- | --- | --- |

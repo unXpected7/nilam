@@ -5,12 +5,12 @@ export const openApiDocument = {
   info: {
     title: 'Nilam API',
     version: '0.1.0',
-    description: 'Marketplace storefront API and token-protected ERP administration API.',
+    description: 'Marketplace storefront API and staff-session-protected ERP administration API.',
   },
   servers: [{ url: '/', description: 'Current server' }],
   tags: [
     { name: 'Storefront', description: 'Public catalogue endpoints.' },
-    { name: 'Admin', description: 'ERP endpoints. Supply the x-admin-token header.' },
+    { name: 'Admin', description: 'ERP endpoints. Sign in through the ERP staff-session flow; state-changing requests also require the nilam_csrf value in x-csrf-token.' },
   ],
   paths: {
     '/api/health': {
@@ -91,7 +91,7 @@ export const openApiDocument = {
     },
   },
   components: {
-    securitySchemes: { AdminToken: { type: 'apiKey', in: 'header', name: 'x-admin-token', description: 'Value of ADMIN_API_TOKEN.' } },
+    securitySchemes: { AdminToken: { type: 'apiKey', in: 'cookie', name: 'nilam_staff', description: 'HttpOnly staff-session cookie issued by /api/erp/auth/login.' } },
     parameters: {
       Id: { in: 'path', name: 'id', required: true, schema: { type: 'string' } },
       ProductHandle: { in: 'path', name: 'handle', required: true, schema: { type: 'string' } },
@@ -99,7 +99,7 @@ export const openApiDocument = {
     responses: {
       BadRequest: { description: 'Invalid request payload' },
       NotFound: { description: 'Resource not found' },
-      Unauthorized: { description: 'Missing or invalid admin token' },
+      Unauthorized: { description: 'Missing or invalid staff session' },
     },
     schemas: {
       StorefrontProduct: { type: 'object', required: ['id', 'handle', 'name', 'price'], properties: { id: { type: 'string' }, handle: { type: 'string' }, name: { type: 'string' }, category: { type: 'string' }, price: { type: 'integer', description: 'IDR' }, image: { type: 'string' }, description: { type: 'string' } } },

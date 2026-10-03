@@ -1,7 +1,7 @@
 # Phase 3 — Nilam purchase journey and customer accounts
 
 **Status: IN PROGRESS**
-**Updated: 2026-10-02 (Asia/Jakarta)**
+**Updated: 2026-10-03 (Asia/Jakarta)**
 
 ## Goal
 
@@ -38,7 +38,7 @@ The reference's collection uses a high-density catalogue with price, colour, and
 ## 1. Shared purchase-flow foundation
 
 - [ ] Confirm the source of truth and calculation rules for IDR prices, sale prices, subtotal, shipping, discounts, tax (if applicable), grand total, and rounding. A server-side configurable 11% tax basis-point setting and integer-IDR rounding helper are in place; shipping, discounts, grand-total and quote authority remain open.
-- [ ] Define and migrate explicit domain models for shipping zones/rates, delivery methods, voucher/redemption rules, checkout/order addresses, order number, payment attempts, and order timeline/events. A Midtrans-ready payment-attempt model/migration is now defined; shipping, voucher, address, order-number, and event models remain open.
+- [x] Define and migrate checkout persistence: payment attempts, vouchers/redemptions, checkout quotes, immutable order number/address/shipping/totals snapshots, shipment state, fulfilment status, and order timeline events. Shipping-zone/rate administration remains open.
 - [ ] Add shared request validation and a consistent public error contract for every cart, checkout, account, and order write endpoint.
 - [ ] Establish an order state machine separating order, payment, and fulfilment states; document allowed transitions, cancellation window, refund rules, and idempotency behaviour.
 - [ ] Add customer-safe rate limits, CSRF protection appropriate to cookie sessions, security headers, structured logging with secret/PII redaction, and correlation IDs for all transactional requests. Initial in-process rate limits, double-submit CSRF protection, baseline browser-security headers, request IDs, and body-free structured request/error logging are implemented; centralised/distributed rate limiting and a transactional audit/log-retention design remain open.

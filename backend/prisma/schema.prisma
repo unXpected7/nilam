@@ -49,6 +49,18 @@ enum InventoryImportStatus {
   ROLLED_BACK
 }
 
+enum InventoryImportJobOperation {
+  APPLY
+  ROLLBACK
+}
+
+enum InventoryImportJobStatus {
+  QUEUED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
   id                 String              @id @default(cuid())
   email              String              @unique
@@ -77,14 +89,55 @@ model StaffUser {
   id           String             @id @default(cuid())
   email        String             @unique
   passwordHash String?
+  mfaSecretEncrypted String?
+  mfaPendingSecretEncrypted String?
+  mfaEnabledAt DateTime?
   firstName    String?
   lastName     String?
   active       Boolean            @default(true)
   roles        StaffUserRole[]
   sessions     StaffSession[]
+  mfaChallenges StaffMfaChallenge[]
   accessEvents StaffAccessEvent[]
+  invitations  StaffInvitation[]
+  passwordResets StaffPasswordReset[]
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
+}
+
+model StaffMfaChallenge {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([staffId, expiresAt])
+}
+
+model StaffInvitation {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([staffId, expiresAt])
+}
+
+model StaffPasswordReset {
+  id        String    @id @default(cuid())
+  staffId   String
+  staff     StaffUser @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([staffId, expiresAt])
 }
 
 model StaffRole {
@@ -266,10 +319,29 @@ model InventoryImport {
   checksum        String?
   actor           String
   rows            InventoryImportRow[]
+  jobs            InventoryImportJob[]
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
   @@index([sourceReference])
+}
+
+model InventoryImportJob {
+  id          String                      @id @default(cuid())
+  importId    String
+  import      InventoryImport             @relation(fields: [importId], references: [id], onDelete: Cascade)
+  operation   InventoryImportJobOperation
+  status      InventoryImportJobStatus    @default(QUEUED)
+  actor       String
+  attempts    Int                         @default(0)
+  error       String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+
+  @@index([status, createdAt])
+  @@index([importId, createdAt])
 }
 
 model InventoryImportRow {
@@ -328,8 +400,20 @@ model Order {
   paymentAttempts   PaymentAttempt[]
   shipment          Shipment?
   events            OrderEvent[]
+  internalNotes     OrderInternalNote[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+}
+
+model OrderInternalNote {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  author    String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model CheckoutQuote {

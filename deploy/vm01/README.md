@@ -15,6 +15,8 @@ docker compose ps
 docker compose logs --tail=50
 ```
 
+The application containers receive provider credentials from that same mode-600 file. Use the environment-specific names `DEV_BREVO_API_KEY`, `DEV_MIDTRANS_SERVER_KEY`, `DEV_MIDTRANS_CLIENT_KEY`, and `DEV_BITESHIP_API_TOKEN` for development; use their `PROD_` equivalents for production. Do not place unprefixed provider credentials in this file or commit any values.
+
 ## GitHub Actions secrets
 
 Create GitHub Environments named `development` and `production`. The current runner is installed on vm01 itself, so database reconciliation runs Docker Compose locally and requires no SSH secrets. Keep the `production` Environment protected with required reviewers.

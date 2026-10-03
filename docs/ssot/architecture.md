@@ -1,5 +1,11 @@
 # Nilam system architecture
 
+> **Commerce/ERP update — 2026-10-03:** Phase 3 checkout models now include `CheckoutQuote`, payment attempts, order number/address/shipping snapshots, fulfilment state, shipments, and order events. Sandbox provider clients are server-only: Midtrans Snap/notification verification, Biteship rates/shipment requests, and Brevo transactional email. Provider secrets reside only in ignored `backend/.env`.
+>
+> Checkout policy: Indonesia-only online service; origin postal code 52412; Biteship JNE/J&T rate choices only; configurable 11% tax; intended Midtrans methods QRIS, GoPay, ShopeePay, and bank virtual accounts. Checkout APIs/webhooks are pending; payment or shipment collection is not enabled.
+>
+> ERP transition: `/api/admin` requires a valid HttpOnly staff-session cookie and route-level RBAC; shared-token authentication has been removed. Staff can enroll a TOTP authenticator; its secret is AES-256-GCM encrypted with an environment-specific `ERP_MFA_ENCRYPTION_KEY`. Production sets `ERP_REQUIRE_MFA_FOR_PRIVILEGED=true`, which blocks staff management, stock imports, order-management, and shipment mutations until that staff member enrolls MFA; development explicitly uses `false` for controlled testing.
+
 Document type: System source of truth (SSOT)
 Last verified: 2026-10-02, Asia/Jakarta
 Repository checkout: /Users/faiz/Documents/private/nilam
@@ -99,7 +105,7 @@ Access paths:
 | Development | https://dev-api-topan.fluxorastudio.id/ |
 | Production | https://api-topan.fluxorastudio.id/ |
 
-The browser admin UI is static plain HTML/CSS/JS from backend/admin-ui. It uses a shared environment token, submitted as the x-admin-token request header and retained in sessionStorage for the browser session.
+The browser admin UI is static plain HTML/CSS/JS from backend/admin-ui. It signs staff in using an HttpOnly `nilam_staff` cookie. State-changing requests must pair that session with the non-HttpOnly `nilam_csrf` value in the `x-csrf-token` header; no ERP bearer token is retained in browser storage.
 
 Current UI capabilities:
 
@@ -270,7 +276,7 @@ Repository Compose source: deploy/vm01/app/docker-compose.yml. All application c
 | prod-frontend / nilam-prod-frontend | Nginx 80 | 10.10.0.2:8092 | API → nilam-prod-backend:4000 |
 | prod-backend / nilam-prod-backend | Express 4000 | 10.10.0.2:5101 | nilam-postgres-prod:5432 |
 
-Backend runtime config includes PORT, CLIENT_ORIGIN, ADMIN_API_TOKEN, and DATABASE_URL. Frontend Nginx gets BACKEND_HOST and BACKEND_PORT. Environment substitutions come from vm01’s private Postgres .env file, not checked-in source.
+Backend runtime config includes PORT, NODE_ENV, CLIENT_ORIGIN, ERP_PUBLIC_URL, DATABASE_URL, and server-only provider credentials. Frontend Nginx gets BACKEND_HOST and BACKEND_PORT. Environment substitutions come from vm01’s private Postgres .env file, not checked-in source. The Compose configuration maps `DEV_BREVO_API_KEY`, `DEV_BREVO_SENDER_EMAIL`, `DEV_MIDTRANS_SERVER_KEY`, `DEV_MIDTRANS_CLIENT_KEY`, and `DEV_BITESHIP_API_TOKEN` only to the development backend; the corresponding `PROD_*` names are mapped only to production. Staff invitation/recovery requires the applicable Brevo API key and verified sender email; do not enable it in production until the sender/domain is approved.
 
 Backend image: Node 24 Alpine; install, Prisma client generation, TypeScript build, prisma migrate deploy, then node dist/server.js.
 
@@ -346,7 +352,9 @@ The production workflow substitutes prod-frontend and prod-backend. Workflow che
 | Secret type | Authoritative location |
 | --- | --- |
 | Local DB URL and local admin token | Ignored backend/.env on developer Mac |
+| Local production provider credentials | Ignored backend/.env.prod on developer Mac |
 | Dev/prod DB credentials and admin tokens | /home/vm01/nilam/postgres/.env on vm01, mode 600 |
+| Deployed provider credentials | `DEV_*` / `PROD_*` provider variables in /home/vm01/nilam/postgres/.env on vm01, mode 600 |
 | MinIO root credentials | vm02 MinIO deployment environment/configuration |
 | SSH keys | Developer/host SSH agent or protected key storage |
 | Cloudflare API credentials | Cloudflare account secret manager if configured |

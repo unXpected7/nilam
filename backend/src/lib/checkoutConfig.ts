@@ -1,7 +1,9 @@
 export function checkoutConfig() {
   const taxRateBasisPoints = Number(process.env.CHECKOUT_TAX_RATE_BASIS_POINTS || 1100)
+  const itemWeightGrams = Number(process.env.CHECKOUT_ITEM_WEIGHT_GRAMS || 500)
   if (!Number.isInteger(taxRateBasisPoints) || taxRateBasisPoints < 0 || taxRateBasisPoints > 10000) throw new Error('Invalid checkout tax rate configuration')
-  return { country: 'ID', originPostalCode: process.env.BITESHIP_ORIGIN_POSTAL_CODE || '52412', taxRateBasisPoints }
+  if (!Number.isInteger(itemWeightGrams) || itemWeightGrams < 1 || itemWeightGrams > 50_000) throw new Error('Invalid checkout item weight configuration')
+  return { country: 'ID', originPostalCode: process.env.BITESHIP_ORIGIN_POSTAL_CODE || '52412', taxRateBasisPoints, itemWeightGrams }
 }
 
 export function calculateTax(subtotal: number) {

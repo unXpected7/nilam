@@ -1,7 +1,7 @@
 # Nilam product and catalogue data SSOT
 
 Document type: Product/catalogue schema source of truth
-Last verified: 2026-10-02, Asia/Jakarta
+Last verified: 2026-10-03, Asia/Jakarta
 Implementation authority: backend/prisma/schema.prisma and checked-in Prisma migrations
 
 This document describes the current database schema and behavior for products, variants, categories, collections, media, inventory, carts, and orders. The Prisma schema and migrations are authoritative if a field definition here becomes stale. This document records implementation, not aspirational features; planned work is labeled separately.
@@ -272,7 +272,7 @@ Deleting the variant cascades to inventory. The low-stock condition is quantity 
 | quantity | Int, required | Quantity after adjustment |
 | delta | Int, required | quantity minus previousQuantity |
 | reason | String, required | Human-provided explanation |
-| actor | String, required | Current code uses token-admin |
+| actor | String, required | Authenticated staff email responsible for the adjustment |
 | createdAt | DateTime, required, default now | Adjustment time |
 
 An index exists on inventoryId and createdAt. Inventory deletion cascades to movement history. Admin adjustment writes Inventory, InventoryMovement, and AdminAuditLog in one Prisma transaction. The movements endpoint returns the latest 100 rows for a variant.
@@ -360,7 +360,7 @@ The cart does not reserve stock. A checkout/order transaction must re-check and 
 
 ## 5. API reference for catalogue data
 
-All admin paths require x-admin-token. Request/response details should be confirmed in current backend/src/routes/admin.ts and backend/src/server.ts when changing this contract.
+All admin paths require an authenticated HttpOnly staff-session cookie and the server-enforced route permission. Request/response details should be confirmed in current backend/src/routes/admin.ts and backend/src/server.ts when changing this contract.
 
 ### Public reads
 
@@ -433,6 +433,21 @@ Not yet implemented or incomplete:
 
 Do not infer these as part of the current schema. Update this document alongside schema/migration changes when decisions are made.
 
+## 7.1 Checkout, payment, shipping, and voucher update
+
+The following schema is now present in `backend/prisma/schema.prisma` and checked-in migrations, although its public checkout APIs are still pending:
+
+- `Order` has optional unique `orderNumber`, integer `discount`, `tax`, `shipping`, `total`, immutable JSON shipping address/method snapshots, `FulfillmentStatus`, payment attempts, optional shipment, and timeline events.
+- `CheckoutQuote` stores a cart/user/email, immutable recipient and selected method snapshots, optional voucher code, integer totals, and expiry. Quotes are not yet created by an API.
+- `PaymentAttempt` stores provider order/payment IDs, Snap token, amount, payment status/type, verified notification hash/time, and belongs to an order.
+- `Shipment` stores the one current shipment per order, provider/service, unique tracking number, status, label URL, and timestamps.
+- `OrderEvent` is an append-only order timeline with actor, request ID, safe payload, and timestamp.
+- `Voucher` supports a unique code, percentage/fixed amount, minimum subtotal, maximum discount, active window, global usage cap/count, and active state. `VoucherRedemption` enforces one use per voucher per authenticated customer and optionally links a resulting order.
+
+Current approved rules: online-only Indonesia delivery from postal code `52412`; Biteship rates limited to JNE/J&T; configurable 11% tax; voucher defaults of 20%, Rp200.000 minimum, Rp30.000 cap, seven-day expiry, and 4–6 alphanumeric code. Provider/checkout APIs must calculate all money server-side in integer IDR.
+
+Additional migrations now present: `20261002100000_product_media_storage`, `20261002110000_customer_sessions`, `20261002120000_default_customer_address`, `20261002140000_payment_attempts`, `20261003090000_vouchers`, `20261003093000_voucher_redemptions`, and `20261003100000_checkout_order_snapshots`.
+
 ## 8. Editing guidance
 
 - Change backend/prisma/schema.prisma, add a migration, update API validation/contracts, and update this SSOT as one coherent schema change.
@@ -442,3 +457,17 @@ Do not infer these as part of the current schema. Update this document alongside
 - Keep media upload credentials server-side and never store MinIO secrets in ProductMedia URLs or browser storage.
 - Do not archive/delete product rows as a substitute for deleting order history.
 - After schema changes, regenerate Prisma Client and rebuild the backend; deploy with migrations.
+
+
+
+
+
+
+
+<!-- Before deployment, add the actual environment-specific values to vm01’s ignored, mode-600 file:
+
+```
+/home/vm01/nilam/postgres/.env
+```
+
+I did not copy local sandbox keys into production because the correct production credentials must remain distinct. -->
