@@ -7,7 +7,7 @@
 > ERP transition: `/api/admin` requires a valid HttpOnly staff-session cookie and route-level RBAC; shared-token authentication has been removed. Staff can enroll a TOTP authenticator; its secret is AES-256-GCM encrypted with an environment-specific `ERP_MFA_ENCRYPTION_KEY`. Production sets `ERP_REQUIRE_MFA_FOR_PRIVILEGED=true`, which blocks staff management, stock imports, order-management, and shipment mutations until that staff member enrolls MFA; development explicitly uses `false` for controlled testing.
 
 Document type: System source of truth (SSOT)
-Last verified: 2026-10-02, Asia/Jakarta
+Last verified: 2026-10-06, Asia/Jakarta
 Repository checkout: /Users/faiz/Documents/private/nilam
 
 This document records the current Nilam system, including repository components, live hosts, networks, databases, storage, and delivery paths. It excludes passwords, access tokens, private keys, and complete secret-bearing connection strings. The locations of authoritative secret files are documented.
@@ -281,6 +281,12 @@ Backend runtime config includes PORT, NODE_ENV, CLIENT_ORIGIN, ERP_PUBLIC_URL, D
 Backend image: Node 24 Alpine; install, Prisma client generation, TypeScript build, prisma migrate deploy, then node dist/server.js.
 
 Frontend image: Node 24 Alpine build; static Vite output copied into Nginx 1.27 Alpine.
+
+### Compose project isolation
+
+The Nilam application Compose file uses the explicit project name `nilam`, and both deployment workflows pass `--project-name nilam`. This separates Nilam services from Fluxora's Compose project, which previously shared the inferred name `app` because both app Compose files live in directories named `app`. During the one-time migration, workflows build before removing only legacy containers named for the target Nilam environment; this avoids stopping Fluxora containers. Keep this project name on manual app deployment commands.
+
+Public routing remains environment-specific: `dev-topan.fluxorastudio.id` → `10.10.0.2:8091`, `dev-api-topan.fluxorastudio.id` → `10.10.0.2:5100`, `topan.fluxorastudio.id` → `10.10.0.2:8092`, and `api-topan.fluxorastudio.id` → `10.10.0.2:5101`. The Nginx source files in `deploy/nginx-public/` are the repository references for those upstreams.
 
 ## 10. Local workflow
 

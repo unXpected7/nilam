@@ -51,5 +51,16 @@ jobs:
           docker compose ps postgres-dev
       - name: Build and deploy development application
         run: |
-          docker compose --env-file "$HOME/nilam/postgres/.env" -f deploy/vm01/app/docker-compose.yml up --build -d dev-frontend dev-backend
-          docker compose --env-file "$HOME/nilam/postgres/.env" -f deploy/vm01/app/docker-compose.yml ps dev-frontend dev-backend
+          compose_file=deploy/vm01/app/docker-compose.yml
+          env_file="$HOME/nilam/postgres/.env"
+          docker compose --project-name nilam --env-file "$env_file" -f "$compose_file" build dev-frontend dev-backend
+          for container in nilam-dev-frontend nilam-dev-backend; do
+            if docker inspect "$container" >/dev/null 2>&1; then
+              project="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$container")"
+              if [ "$project" != nilam ]; then
+                docker rm --force "$container"
+              fi
+            fi
+          done
+          docker compose --project-name nilam --env-file "$env_file" -f "$compose_file" up -d dev-frontend dev-backend
+          docker compose --project-name nilam --env-file "$env_file" -f "$compose_file" ps dev-frontend dev-backend
